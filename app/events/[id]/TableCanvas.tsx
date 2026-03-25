@@ -10,30 +10,29 @@ interface Props {
   initialTables: Table[]
 }
 
-function TableVisual({ shape, selected, onClick, dim }: {
-  shape: TableShape
-  selected?: boolean
-  onClick?: () => void
-  dim?: boolean
-}) {
-  const ring = selected ? 'border-gray-900' : 'border-gray-300 hover:border-gray-500'
-  const bg = selected ? 'bg-gray-900' : 'bg-white'
-  const base = `border-2 transition-all cursor-pointer ${ring} ${bg} ${dim ? 'opacity-40' : ''}`
-  if (shape === 'round') return <div onClick={onClick} className={`${base} rounded-full w-20 h-20`} />
-  if (shape === 'oval') return <div onClick={onClick} className={`${base} rounded-[50%] w-28 h-20`} />
-  return <div onClick={onClick} className={`${base} rounded-xl w-28 h-20`} />
+const SHAPES: { value: TableShape; label: string }[] = [
+  { value: 'rectangular', label: 'Rectangle' },
+  { value: 'round', label: 'Round' },
+  { value: 'oval', label: 'Oval' },
+]
+
+function ShapeIcon({ shape, selected }: { shape: TableShape; selected?: boolean }) {
+  const base = `border-2 transition-colors ${selected ? 'border-gray-900 bg-gray-900' : 'border-gray-300 bg-white group-hover:border-gray-600'}`
+  if (shape === 'rectangular') return <div className={`${base} rounded-md w-10 h-7`} />
+  if (shape === 'round') return <div className={`${base} rounded-full w-8 h-8`} />
+  return <div className={`${base} rounded-[50%] w-12 h-7`} />
 }
 
 function TableCard({ table }: { table: Table }) {
   const base = 'flex flex-col items-center justify-center bg-white border-2 border-gray-200 shadow-sm select-none'
-  const shape =
+  const cls =
     table.shape === 'round'
       ? `${base} rounded-full w-32 h-32`
       : table.shape === 'oval'
       ? `${base} rounded-[50%] w-44 h-32`
       : `${base} rounded-xl w-44 h-32`
   return (
-    <div className={shape}>
+    <div className={cls}>
       <span className="text-sm font-medium text-gray-800 text-center px-3 leading-tight">{table.name}</span>
       <span className="text-xs text-gray-400 mt-1">{table.capacity} seats</span>
     </div>
@@ -66,6 +65,11 @@ export default function TableCanvas({ eventId, initialTables }: Props) {
     setShape(null)
   }
 
+  function pickShape(s: TableShape) {
+    setShape(s)
+    setStep('details')
+  }
+
   async function handleAdd() {
     if (!shape || !name.trim() || saving) return
     setSaving(true)
@@ -85,33 +89,88 @@ export default function TableCanvas({ eventId, initialTables }: Props) {
 
   return (
     <div className="flex-1 flex flex-col border-r border-gray-200 overflow-hidden">
-      {/* Header — only show once tables exist */}
-      {tables.length > 0 && (
-        <div className="px-5 py-3 border-b border-gray-100 bg-white flex items-center justify-between flex-shrink-0">
-          <span className="text-sm font-semibold text-gray-700">
-            Tables
-            <span className="ml-1.5 text-gray-400 font-normal">{tables.length}</span>
-          </span>
-          {step === 'idle' && (
+      {/* Header */}
+      <div className="px-5 py-3 border-b border-gray-100 bg-white flex items-center justify-between flex-shrink-0">
+        <span className="text-sm font-semibold text-gray-700">
+          Tables
+          {tables.length > 0 && <span className="ml-1.5 text-gray-400 font-normal">{tables.length}</span>}
+        </span>
+        {step === 'idle' ? (
+          <button
+            onClick={openAdd}
+            className="text-xs text-gray-500 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-100 transition-colors font-medium"
+          >
+            + Add table
+          </button>
+        ) : (
+          <button onClick={cancel} className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1">
+            Cancel
+          </button>
+        )}
+      </div>
+
+      {/* Step 1: shape picker */}
+      {step === 'shape' && (
+        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-6">
+          {SHAPES.map(s => (
             <button
-              onClick={openAdd}
-              className="text-xs text-gray-500 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-100 transition-colors font-medium"
+              key={s.value}
+              onClick={() => pickShape(s.value)}
+              className="group flex flex-col items-center gap-2"
             >
-              + Add table
+              <ShapeIcon shape={s.value} />
+              <span className="text-xs text-gray-500 group-hover:text-gray-800">{s.label}</span>
             </button>
-          )}
+          ))}
         </div>
       )}
 
+      {/* Step 2: details */}
+      {step === 'details' && shape && (
+        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-3">
+          <button onClick={() => setStep('shape')} className="group flex flex-col items-center gap-1.5 flex-shrink-0">
+            <ShapeIcon shape={shape} selected />
+            <span className="text-xs text-gray-400 group-hover:text-gray-600">Change</span>
+          </button>
+          <div className="w-px h-10 bg-gray-200 flex-shrink-0" />
+          <input
+            ref={nameRef}
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleAdd()
+              if (e.key === 'Escape') cancel()
+            }}
+            placeholder="Table name"
+            className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:border-gray-900 w-32"
+          />
+          <input
+            type="number"
+            min={1}
+            max={30}
+            value={capacity}
+            onChange={e => setCapacity(Number(e.target.value))}
+            className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:border-gray-900 w-20"
+          />
+          <span className="text-xs text-gray-400 flex-shrink-0">seats</span>
+          <button
+            onClick={handleAdd}
+            disabled={!name.trim() || saving}
+            className="text-xs bg-gray-900 text-white px-3 py-1.5 rounded-lg disabled:opacity-40 hover:bg-gray-700 transition-colors"
+          >
+            {saving ? 'Adding…' : 'Add'}
+          </button>
+        </div>
+      )}
+
+      {/* Canvas */}
       <div className="flex-1 overflow-auto relative">
-        {/* Existing tables */}
         {tables.length > 0 && (
           <div className="p-8 flex flex-wrap gap-8 content-start">
             {tables.map(t => <TableCard key={t.id} table={t} />)}
           </div>
         )}
-
-        {/* Empty state */}
         {showEmpty && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
             <p className="text-sm text-gray-400">No tables yet</p>
@@ -121,83 +180,6 @@ export default function TableCanvas({ eventId, initialTables }: Props) {
             >
               Add first table
             </button>
-          </div>
-        )}
-
-        {/* Step 1: Shape picker */}
-        {step === 'shape' && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 w-96">
-              <h3 className="text-sm font-semibold text-gray-800 mb-6">What shape is this table?</h3>
-              <div className="flex items-end justify-center gap-8 mb-8">
-                {(['round', 'rectangular', 'oval'] as TableShape[]).map(s => (
-                  <div key={s} className="flex flex-col items-center gap-3">
-                    <TableVisual
-                      shape={s}
-                      selected={shape === s}
-                      onClick={() => { setShape(s); setStep('details') }}
-                    />
-                    <span className="text-xs text-gray-500 capitalize">{s}</span>
-                  </div>
-                ))}
-              </div>
-              <button onClick={cancel} className="text-xs text-gray-400 hover:text-gray-600">
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 2: Name + capacity */}
-        {step === 'details' && shape && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 w-80">
-              <div className="flex justify-center mb-6">
-                <TableVisual shape={shape} selected />
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">Table name</label>
-                  <input
-                    ref={nameRef}
-                    type="text"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') handleAdd()
-                      if (e.key === 'Escape') cancel()
-                    }}
-                    className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">Number of seats</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={capacity}
-                    onChange={e => setCapacity(Number(e.target.value))}
-                    className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-gray-900"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2 mt-6">
-                <button
-                  onClick={handleAdd}
-                  disabled={!name.trim() || saving}
-                  className="flex-1 text-sm bg-gray-900 text-white py-2 rounded-lg disabled:opacity-40 hover:bg-gray-700 transition-colors"
-                >
-                  {saving ? 'Adding…' : 'Add table'}
-                </button>
-                <button
-                  onClick={() => setStep('shape')}
-                  className="text-sm text-gray-500 px-3 py-2 rounded-lg hover:bg-gray-100"
-                >
-                  Back
-                </button>
-              </div>
-            </div>
           </div>
         )}
       </div>
