@@ -179,10 +179,27 @@ export default function TableCanvas({ eventId, initialTables }: Props) {
         )}
         {showEmpty && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-            <p className="text-sm text-gray-400">No tables yet</p>
+            {/* Ghost floor plan */}
+            <div className="absolute inset-0 pointer-events-none select-none opacity-[0.09]">
+              {/* Head table */}
+              <div className="absolute bg-gray-900 rounded-xl" style={{ width: 280, height: 52, top: '8%', left: '50%', transform: 'translateX(-50%)' }} />
+              {/* Row 1 — 3 round tables */}
+              <div className="absolute bg-gray-900 rounded-full" style={{ width: 96, height: 96, top: '24%', left: '18%' }} />
+              <div className="absolute bg-gray-900 rounded-full" style={{ width: 96, height: 96, top: '24%', left: '44%', transform: 'translateX(-50%)' }} />
+              <div className="absolute bg-gray-900 rounded-full" style={{ width: 96, height: 96, top: '24%', right: '18%' }} />
+              {/* Row 2 — 3 round tables */}
+              <div className="absolute bg-gray-900 rounded-full" style={{ width: 96, height: 96, top: '46%', left: '12%' }} />
+              <div className="absolute bg-gray-900 rounded-full" style={{ width: 96, height: 96, top: '46%', left: '44%', transform: 'translateX(-50%)' }} />
+              <div className="absolute bg-gray-900 rounded-full" style={{ width: 96, height: 96, top: '46%', right: '12%' }} />
+              {/* Row 3 — 2 round + 1 rectangular */}
+              <div className="absolute bg-gray-900 rounded-full" style={{ width: 96, height: 96, top: '68%', left: '22%' }} />
+              <div className="absolute bg-gray-900 rounded-xl" style={{ width: 140, height: 80, top: '68%', left: '44%', transform: 'translateX(-50%)' }} />
+              <div className="absolute bg-gray-900 rounded-full" style={{ width: 96, height: 96, top: '68%', right: '22%' }} />
+            </div>
+            <p className="text-sm text-gray-400 relative z-10">No tables yet</p>
             <button
               onClick={openAdd}
-              className="text-sm bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
+              className="text-sm bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors relative z-10"
             >
               Add first table
             </button>
