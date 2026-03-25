@@ -151,4 +151,5 @@ Backlog → Todo → In Progress → Done
 - 3 backlog issues created for deferred auth work: PLA-12 (users table), PLA-13 (collaborators table), PLA-14 (RLS policies)
 - PLA-8 complete: Full creation flow live — dashboard (`/`), create project (`/projects/new`), project page (`/projects/[id]`), create event (`/projects/[id]/events/new`), event workspace skeleton (`/events/[id]`)
 - Note: `params` is a Promise in Next.js 16 — always `await params` in server components, use `use(params)` in client components
-- Next up: PLA-9 — Guest list (add guests manually, view unassigned list)
+- PLA-9 complete: Guest list live — manual add, CSV import (Zola format detection), guest display with +1/child badges and ⚑ flag. Files: `app/events/[id]/GuestList.tsx` (new), `app/events/[id]/page.tsx` (updated). Sample CSV at `sample-guests.csv`.
+- Next up: PLA-10 — Table setup: add tables with name, shape, and capacity

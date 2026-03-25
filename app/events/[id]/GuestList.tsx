@@ -1,0 +1,235 @@
+'use client'
+
+import { useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import Papa from 'papaparse'
+import { supabase } from '@/lib/supabase'
+import type { Guest, RelationshipType } from '@/lib/types'
+
+interface Props {
+  eventId: string
+  projectId: string
+  initialGuests: Guest[]
+}
+
+function detectName(row: Record<string, string>): string {
+  const keys = Object.keys(row)
+  const firstKey = keys.find(k => /^first[\s_]?name$/i.test(k))
+  const lastKey = keys.find(k => /^last[\s_]?name$/i.test(k))
+  if (firstKey && lastKey) return `${row[firstKey]} ${row[lastKey]}`.trim()
+  const nameKey = keys.find(k => /^(full[\s_]?)?name$/i.test(k))
+  if (nameKey) return row[nameKey].trim()
+  return Object.values(row)[0]?.trim() ?? ''
+}
+
+function detectRelationship(row: Record<string, string>): RelationshipType {
+  const typeKey = Object.keys(row).find(k => /^(guest[\s_]?type|type|relationship)$/i.test(k))
+  if (typeKey) {
+    const val = row[typeKey].toLowerCase()
+    if (val.includes('plus') || val.includes('+1')) return 'plus_one'
+    if (val.includes('child') || val.includes('kid')) return 'child'
+  }
+  const guestOfKey = Object.keys(row).find(k => /^guest[\s_]?of$/i.test(k))
+  if (guestOfKey && row[guestOfKey]?.trim()) return 'plus_one'
+  return 'primary'
+}
+
+function detectHostName(row: Record<string, string>): string {
+  const guestOfKey = Object.keys(row).find(k => /^guest[\s_]?of$/i.test(k))
+  return guestOfKey ? (row[guestOfKey] ?? '').trim() : ''
+}
+
+export default function GuestList({ eventId, projectId, initialGuests }: Props) {
+  const [adding, setAdding] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importCount, setImportCount] = useState<number | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const router = useRouter()
+
+  async function handleAddGuest() {
+    if (!newName.trim() || saving) return
+    setSaving(true)
+    const { data: guest } = await supabase
+      .from('guests')
+      .insert({ project_id: projectId, name: newName.trim(), relationship_type: 'primary' })
+      .select('id')
+      .single()
+    if (guest) {
+      await supabase.from('event_guests').insert({ event_id: eventId, guest_id: guest.id })
+    }
+    setNewName('')
+    setAdding(false)
+    setSaving(false)
+    router.refresh()
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setImporting(true)
+    setImportCount(null)
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        const rows = results.data as Record<string, string>[]
+        if (!rows.length) { setImporting(false); return }
+
+        const parsed = rows
+          .map(row => ({
+            name: detectName(row),
+            relationship_type: detectRelationship(row),
+            hostName: detectHostName(row),
+          }))
+          .filter(g => g.name.length > 0)
+
+        const { data: inserted } = await supabase
+          .from('guests')
+          .insert(parsed.map(g => ({
+            project_id: projectId,
+            name: g.name,
+            relationship_type: g.relationship_type,
+          })))
+          .select('id, name')
+
+        if (!inserted) { setImporting(false); return }
+
+        // Link plus-ones to their hosts
+        const nameToId = new Map(inserted.map(g => [g.name.toLowerCase(), g.id]))
+        const updates = parsed
+          .map((g, i) => ({ hostName: g.hostName, guestId: inserted[i]?.id }))
+          .filter(u => u.hostName && u.guestId)
+        for (const u of updates) {
+          const hostId = nameToId.get(u.hostName.toLowerCase())
+          if (hostId) {
+            await supabase.from('guests').update({ host_id: hostId }).eq('id', u.guestId)
+          }
+        }
+
+        // Link all guests to this event
+        await supabase
+          .from('event_guests')
+          .insert(inserted.map(g => ({ event_id: eventId, guest_id: g.id })))
+
+        setImportCount(inserted.length)
+        setImporting(false)
+        router.refresh()
+      },
+    })
+  }
+
+  const guests = initialGuests
+
+  return (
+    <aside className="w-72 bg-white flex flex-col flex-shrink-0">
+      <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-gray-700">
+          Guests
+          {guests.length > 0 && (
+            <span className="ml-1.5 text-gray-400 font-normal">{guests.length}</span>
+          )}
+        </h2>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            title="Import CSV"
+            className="text-xs text-gray-500 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-100 transition-colors font-medium"
+          >
+            Import CSV
+          </button>
+          <button
+            onClick={() => { setAdding(true); setImportCount(null) }}
+            title="Add guest"
+            className="text-lg leading-none text-gray-400 hover:text-gray-900 w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 transition-colors"
+          >
+            +
+          </button>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {adding && (
+          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+            <input
+              autoFocus
+              type="text"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleAddGuest()
+                if (e.key === 'Escape') { setAdding(false); setNewName('') }
+              }}
+              placeholder="Guest name"
+              className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-gray-900 placeholder-gray-400"
+            />
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={handleAddGuest}
+                disabled={!newName.trim() || saving}
+                className="text-xs bg-gray-900 text-white px-3 py-1.5 rounded-lg disabled:opacity-40"
+              >
+                {saving ? 'Adding…' : 'Add'}
+              </button>
+              <button
+                onClick={() => { setAdding(false); setNewName('') }}
+                className="text-xs text-gray-500 px-3 py-1.5 rounded-lg hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {importing && (
+          <div className="px-5 py-3 text-sm text-gray-400 border-b border-gray-50">
+            Importing…
+          </div>
+        )}
+
+        {importCount !== null && !importing && (
+          <div className="px-5 py-3 text-sm text-green-600 border-b border-gray-50">
+            ✓ Imported {importCount} guests
+          </div>
+        )}
+
+        {guests.length === 0 && !adding && !importing ? (
+          <div className="flex flex-col items-center justify-center h-48 text-center px-6">
+            <p className="text-sm text-gray-400">No guests yet</p>
+            <p className="text-xs text-gray-300 mt-1">Add guests manually or import a CSV</p>
+          </div>
+        ) : (
+          <ul>
+            {guests.map(guest => (
+              <li
+                key={guest.id}
+                className="px-5 py-2.5 border-b border-gray-50 flex items-center gap-2"
+              >
+                <span className="text-sm text-gray-800">{guest.name}</span>
+                {guest.relationship_type === 'plus_one' && (
+                  <span className="text-xs text-gray-400">+1</span>
+                )}
+                {guest.relationship_type === 'child' && (
+                  <span className="text-xs text-gray-400">child</span>
+                )}
+                {guest.needs_consideration && (
+                  <span className="ml-auto text-xs text-amber-500">⚑</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </aside>
+  )
+}
