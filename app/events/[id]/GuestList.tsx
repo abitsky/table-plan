@@ -41,7 +41,7 @@ function detectHostName(row: Record<string, string>): string {
 
 export default function GuestList({ eventId, projectId, initialGuests }: Props) {
   const [adding, setAdding] = useState(false)
-  const [addMode, setAddMode] = useState<'single' | 'couple'>('single')
+  const [addMode, setAddMode] = useState<'single' | 'couple'>('couple')
   const [newName, setNewName] = useState('')
   const [partnerName, setPartnerName] = useState('')
   const [saving, setSaving] = useState(false)
@@ -52,7 +52,7 @@ export default function GuestList({ eventId, projectId, initialGuests }: Props) 
 
   function openAdd() {
     setAdding(true)
-    setAddMode('single')
+    setAddMode('couple')
     setNewName('')
     setPartnerName('')
     setImportCount(null)
@@ -291,6 +291,7 @@ export default function GuestList({ eventId, projectId, initialGuests }: Props) 
                   primaries.push(g)
                 }
               }
+              primaries.sort((a, b) => a.name.localeCompare(b.name))
               return primaries.map(host => (
                 <li key={host.id}>
                   <div className="px-5 py-2.5 border-b border-gray-50 flex items-center gap-2">
