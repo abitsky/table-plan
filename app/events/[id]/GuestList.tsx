@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useDraggable } from '@dnd-kit/core'
 import Papa from 'papaparse'
 import { supabase } from '@/lib/supabase'
 import type { Guest, RelationshipType } from '@/lib/types'
@@ -10,6 +11,7 @@ interface Props {
   eventId: string
   projectId: string
   initialGuests: Guest[]
+  assignments: Map<string, string>
 }
 
 function detectName(row: Record<string, string>): string {
@@ -39,7 +41,40 @@ function detectHostName(row: Record<string, string>): string {
   return guestOfKey ? (row[guestOfKey] ?? '').trim() : ''
 }
 
-export default function GuestList({ eventId, projectId, initialGuests }: Props) {
+function DraggableGuestRow({ guest, deps }: { guest: Guest; deps: Guest[] }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: guest.id })
+  return (
+    <li ref={setNodeRef} style={{ opacity: isDragging ? 0.3 : 1 }}>
+      <div
+        {...listeners}
+        {...attributes}
+        className="px-5 py-2.5 border-b border-gray-50 flex items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-gray-50 transition-colors"
+      >
+        <span className="text-sm text-gray-800">{guest.name}</span>
+        {guest.needs_consideration && (
+          <span className="ml-auto text-xs text-amber-500">⚑</span>
+        )}
+      </div>
+      {deps.map(dep => (
+        <div
+          key={dep.id}
+          className="pl-8 pr-5 py-2 border-b border-gray-50 flex items-center gap-2 bg-gray-50"
+        >
+          <span className="text-xs text-gray-400 mr-0.5">↳</span>
+          <span className="text-sm text-gray-600">{dep.name}</span>
+          <span className="text-xs text-gray-400">
+            {dep.relationship_type === 'child' ? 'child' : '+1'}
+          </span>
+          {dep.needs_consideration && (
+            <span className="ml-auto text-xs text-amber-500">⚑</span>
+          )}
+        </div>
+      ))}
+    </li>
+  )
+}
+
+export default function GuestList({ eventId, projectId, initialGuests, assignments }: Props) {
   const [adding, setAdding] = useState(false)
   const [addMode, setAddMode] = useState<'single' | 'couple'>('couple')
   const [newName, setNewName] = useState('')
@@ -78,7 +113,6 @@ export default function GuestList({ eventId, projectId, initialGuests }: Props) 
         await supabase.from('event_guests').insert({ event_id: eventId, guest_id: guest.id })
       }
     } else {
-      // Insert primary guest first
       const { data: primary } = await supabase
         .from('guests')
         .insert({ project_id: projectId, name: newName.trim(), relationship_type: 'primary' })
@@ -86,7 +120,6 @@ export default function GuestList({ eventId, projectId, initialGuests }: Props) 
         .single()
       if (primary) {
         await supabase.from('event_guests').insert({ event_id: eventId, guest_id: primary.id })
-        // Insert partner linked to primary
         if (partnerName.trim()) {
           const { data: partner } = await supabase
             .from('guests')
@@ -140,7 +173,6 @@ export default function GuestList({ eventId, projectId, initialGuests }: Props) 
 
         if (!inserted) { setImporting(false); return }
 
-        // Link plus-ones to their hosts
         const nameToId = new Map(inserted.map(g => [g.name.toLowerCase(), g.id]))
         const updates = parsed
           .map((g, i) => ({ hostName: g.hostName, guestId: inserted[i]?.id }))
@@ -152,7 +184,6 @@ export default function GuestList({ eventId, projectId, initialGuests }: Props) 
           }
         }
 
-        // Link all guests to this event
         await supabase
           .from('event_guests')
           .insert(inserted.map(g => ({ event_id: eventId, guest_id: g.id })))
@@ -164,15 +195,34 @@ export default function GuestList({ eventId, projectId, initialGuests }: Props) 
     })
   }
 
-  const guests = initialGuests
+  // Build dependents map
+  const dependents = new Map<string, Guest[]>()
+  const primaries: Guest[] = []
+  for (const g of initialGuests) {
+    if (g.host_id) {
+      const arr = dependents.get(g.host_id) ?? []
+      arr.push(g)
+      dependents.set(g.host_id, arr)
+    } else {
+      primaries.push(g)
+    }
+  }
+  primaries.sort((a, b) => a.name.localeCompare(b.name))
+
+  // Only show primaries that haven't been assigned to a table
+  const unassigned = primaries.filter(g => !assignments.has(g.id))
+  const assignedCount = primaries.length - unassigned.length
 
   return (
     <aside className="w-72 bg-white flex flex-col flex-shrink-0">
       <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-gray-700">
           Guests
-          {guests.length > 0 && (
-            <span className="ml-1.5 text-gray-400 font-normal">{guests.length}</span>
+          {unassigned.length > 0 && (
+            <span className="ml-1.5 text-gray-400 font-normal">{unassigned.length} unassigned</span>
+          )}
+          {assignedCount > 0 && unassigned.length === 0 && (
+            <span className="ml-1.5 text-green-500 font-normal">all seated</span>
           )}
         </h2>
         <div className="flex items-center gap-1">
@@ -272,52 +322,26 @@ export default function GuestList({ eventId, projectId, initialGuests }: Props) 
           </div>
         )}
 
-        {guests.length === 0 && !adding && !importing ? (
-          <div className="flex flex-col items-center justify-center h-48 text-center px-6">
-            <p className="text-sm text-gray-400">No guests yet</p>
-            <p className="text-xs text-gray-300 mt-1">Add guests manually or import a CSV</p>
-          </div>
+        {unassigned.length === 0 && !adding && !importing ? (
+          primaries.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-48 text-center px-6">
+              <p className="text-sm text-gray-400">No guests yet</p>
+              <p className="text-xs text-gray-300 mt-1">Add guests manually or import a CSV</p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-48 text-center px-6">
+              <p className="text-sm text-gray-500">Everyone is seated</p>
+            </div>
+          )
         ) : (
           <ul>
-            {(() => {
-              const dependents = new Map<string, Guest[]>()
-              const primaries: Guest[] = []
-              for (const g of guests) {
-                if (g.host_id) {
-                  const arr = dependents.get(g.host_id) ?? []
-                  arr.push(g)
-                  dependents.set(g.host_id, arr)
-                } else {
-                  primaries.push(g)
-                }
-              }
-              primaries.sort((a, b) => a.name.localeCompare(b.name))
-              return primaries.map(host => (
-                <li key={host.id}>
-                  <div className="px-5 py-2.5 border-b border-gray-50 flex items-center gap-2">
-                    <span className="text-sm text-gray-800">{host.name}</span>
-                    {host.needs_consideration && (
-                      <span className="ml-auto text-xs text-amber-500">⚑</span>
-                    )}
-                  </div>
-                  {(dependents.get(host.id) ?? []).map(dep => (
-                    <div
-                      key={dep.id}
-                      className="pl-8 pr-5 py-2 border-b border-gray-50 flex items-center gap-2 bg-gray-50"
-                    >
-                      <span className="text-xs text-gray-400 mr-0.5">↳</span>
-                      <span className="text-sm text-gray-600">{dep.name}</span>
-                      <span className="text-xs text-gray-400">
-                        {dep.relationship_type === 'child' ? 'child' : '+1'}
-                      </span>
-                      {dep.needs_consideration && (
-                        <span className="ml-auto text-xs text-amber-500">⚑</span>
-                      )}
-                    </div>
-                  ))}
-                </li>
-              ))
-            })()}
+            {unassigned.map(host => (
+              <DraggableGuestRow
+                key={host.id}
+                guest={host}
+                deps={dependents.get(host.id) ?? []}
+              />
+            ))}
           </ul>
         )}
       </div>

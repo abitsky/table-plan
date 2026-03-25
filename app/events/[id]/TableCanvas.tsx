@@ -2,12 +2,15 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useDroppable } from '@dnd-kit/core'
 import { supabase } from '@/lib/supabase'
-import type { Table, TableShape } from '@/lib/types'
+import type { Guest, Table, TableShape } from '@/lib/types'
 
 interface Props {
   eventId: string
   initialTables: Table[]
+  assignments: Map<string, string>
+  guests: Guest[]
 }
 
 const SHAPES: { value: TableShape; label: string }[] = [
@@ -23,23 +26,58 @@ function ShapeIcon({ shape, selected }: { shape: TableShape; selected?: boolean 
   return <div className={`${base} rounded-[50%] w-12 h-7`} />
 }
 
-function TableCard({ table }: { table: Table }) {
-  const base = 'flex flex-col items-center justify-center bg-white border-2 border-gray-200 shadow-sm select-none'
-  const cls =
+function DroppableTableCard({ table, assignedGuests }: { table: Table; assignedGuests: Guest[] }) {
+  const { setNodeRef, isOver } = useDroppable({ id: table.id })
+  const overCapacity = assignedGuests.length > table.capacity
+
+  const borderColor = overCapacity
+    ? 'border-red-400'
+    : isOver
+    ? 'border-gray-500'
+    : 'border-gray-200'
+  const bgColor = overCapacity ? 'bg-red-50' : isOver ? 'bg-gray-50' : 'bg-white'
+
+  const base = `flex flex-col items-center justify-center border-2 shadow-sm select-none transition-colors ${borderColor} ${bgColor}`
+  const shapeClass =
     table.shape === 'round'
-      ? `${base} rounded-full w-32 h-32`
+      ? `${base} rounded-full w-36 h-36`
       : table.shape === 'oval'
-      ? `${base} rounded-[50%] w-44 h-32`
-      : `${base} rounded-xl w-44 h-32`
+      ? `${base} rounded-[50%] w-48 h-36`
+      : `${base} rounded-xl w-48 h-36`
+
+  // Show only primary guests (not dependents) as name chips
+  const primaryGuests = assignedGuests.filter(g => !g.host_id)
+  const chips = primaryGuests.slice(0, 3)
+  const extraCount = primaryGuests.length - chips.length
+
   return (
-    <div className={cls}>
-      <span className="text-sm font-medium text-gray-800 text-center px-3 leading-tight">{table.name}</span>
-      <span className="text-xs text-gray-400 mt-1">{table.capacity} seats</span>
+    <div ref={setNodeRef} className={shapeClass}>
+      <span className="text-sm font-medium text-gray-800 text-center px-3 leading-tight">
+        {table.name}
+      </span>
+      <span className={`text-xs mt-0.5 ${overCapacity ? 'text-red-500 font-semibold' : 'text-gray-400'}`}>
+        {assignedGuests.length}/{table.capacity}
+      </span>
+      {chips.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap justify-center gap-0.5 px-2 max-w-full">
+          {chips.map(g => (
+            <span
+              key={g.id}
+              className="text-[10px] text-gray-500 bg-gray-100 rounded px-1 leading-5 truncate max-w-[52px]"
+            >
+              {g.name.split(' ')[0]}
+            </span>
+          ))}
+          {extraCount > 0 && (
+            <span className="text-[10px] text-gray-400 leading-5">+{extraCount}</span>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
-export default function TableCanvas({ eventId, initialTables }: Props) {
+export default function TableCanvas({ eventId, initialTables, assignments, guests }: Props) {
   const [tables, setTables] = useState(initialTables)
   const [step, setStep] = useState<'idle' | 'shape' | 'details'>('idle')
   const [shape, setShape] = useState<TableShape | null>(null)
@@ -174,24 +212,25 @@ export default function TableCanvas({ eventId, initialTables }: Props) {
       <div className="flex-1 overflow-auto relative">
         {tables.length > 0 && (
           <div className="p-8 flex flex-wrap gap-8 content-start">
-            {tables.map(t => <TableCard key={t.id} table={t} />)}
+            {tables.map(t => {
+              const assignedGuests = guests.filter(g => assignments.get(g.id) === t.id)
+              return (
+                <DroppableTableCard key={t.id} table={t} assignedGuests={assignedGuests} />
+              )
+            })}
           </div>
         )}
         {showEmpty && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
             {/* Ghost floor plan */}
             <div className="absolute inset-0 pointer-events-none select-none opacity-[0.09]">
-              {/* Head table */}
               <div className="absolute bg-gray-900 rounded-xl" style={{ width: 280, height: 52, top: '8%', left: '50%', transform: 'translateX(-50%)' }} />
-              {/* Row 1 — 3 round tables */}
               <div className="absolute bg-gray-900 rounded-full" style={{ width: 96, height: 96, top: '24%', left: '18%' }} />
               <div className="absolute bg-gray-900 rounded-full" style={{ width: 96, height: 96, top: '24%', left: '44%', transform: 'translateX(-50%)' }} />
               <div className="absolute bg-gray-900 rounded-full" style={{ width: 96, height: 96, top: '24%', right: '18%' }} />
-              {/* Row 2 — 3 round tables */}
               <div className="absolute bg-gray-900 rounded-full" style={{ width: 96, height: 96, top: '46%', left: '12%' }} />
               <div className="absolute bg-gray-900 rounded-full" style={{ width: 96, height: 96, top: '46%', left: '44%', transform: 'translateX(-50%)' }} />
               <div className="absolute bg-gray-900 rounded-full" style={{ width: 96, height: 96, top: '46%', right: '12%' }} />
-              {/* Row 3 — 2 round + 1 rectangular */}
               <div className="absolute bg-gray-900 rounded-full" style={{ width: 96, height: 96, top: '68%', left: '22%' }} />
               <div className="absolute bg-gray-900 rounded-xl" style={{ width: 140, height: 80, top: '68%', left: '44%', transform: 'translateX(-50%)' }} />
               <div className="absolute bg-gray-900 rounded-full" style={{ width: 96, height: 96, top: '68%', right: '22%' }} />

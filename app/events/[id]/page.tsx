@@ -1,9 +1,8 @@
 import { supabase } from '@/lib/supabase'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import type { Guest, Table } from '@/lib/types'
-import GuestList from './GuestList'
-import TableCanvas from './TableCanvas'
+import type { Guest, Table, SeatAssignment } from '@/lib/types'
+import SeatingWorkspace from './SeatingWorkspace'
 
 export default async function EventWorkspace({
   params,
@@ -12,11 +11,13 @@ export default async function EventWorkspace({
 }) {
   const { id } = await params
 
-  const [{ data: event }, { data: eventGuests }, { data: tables }] = await Promise.all([
-    supabase.from('events').select('*, projects(id, name)').eq('id', id).single(),
-    supabase.from('event_guests').select('guests(*)').eq('event_id', id),
-    supabase.from('tables').select('*').eq('event_id', id).order('created_at'),
-  ])
+  const [{ data: event }, { data: eventGuests }, { data: tables }, { data: seatAssignments }] =
+    await Promise.all([
+      supabase.from('events').select('*, projects(id, name)').eq('id', id).single(),
+      supabase.from('event_guests').select('guests(*)').eq('event_id', id),
+      supabase.from('tables').select('*').eq('event_id', id).order('created_at'),
+      supabase.from('seat_assignments').select('*').eq('event_id', id),
+    ])
 
   if (!event) notFound()
 
@@ -36,8 +37,13 @@ export default async function EventWorkspace({
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <TableCanvas eventId={id} initialTables={(tables ?? []) as Table[]} />
-        <GuestList eventId={id} projectId={event.project_id} initialGuests={guests} />
+        <SeatingWorkspace
+          eventId={id}
+          projectId={event.project_id}
+          guests={guests}
+          tables={(tables ?? []) as Table[]}
+          initialAssignments={(seatAssignments ?? []) as SeatAssignment[]}
+        />
       </div>
     </div>
   )
