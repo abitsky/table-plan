@@ -210,23 +210,44 @@ export default function GuestList({ eventId, projectId, initialGuests }: Props) 
           </div>
         ) : (
           <ul>
-            {guests.map(guest => (
-              <li
-                key={guest.id}
-                className="px-5 py-2.5 border-b border-gray-50 flex items-center gap-2"
-              >
-                <span className="text-sm text-gray-800">{guest.name}</span>
-                {guest.relationship_type === 'plus_one' && (
-                  <span className="text-xs text-gray-400">+1</span>
-                )}
-                {guest.relationship_type === 'child' && (
-                  <span className="text-xs text-gray-400">child</span>
-                )}
-                {guest.needs_consideration && (
-                  <span className="ml-auto text-xs text-amber-500">⚑</span>
-                )}
-              </li>
-            ))}
+            {(() => {
+              const dependents = new Map<string, Guest[]>()
+              const primaries: Guest[] = []
+              for (const g of guests) {
+                if (g.host_id) {
+                  const arr = dependents.get(g.host_id) ?? []
+                  arr.push(g)
+                  dependents.set(g.host_id, arr)
+                } else {
+                  primaries.push(g)
+                }
+              }
+              return primaries.map(host => (
+                <li key={host.id}>
+                  <div className="px-5 py-2.5 border-b border-gray-50 flex items-center gap-2">
+                    <span className="text-sm text-gray-800">{host.name}</span>
+                    {host.needs_consideration && (
+                      <span className="ml-auto text-xs text-amber-500">⚑</span>
+                    )}
+                  </div>
+                  {(dependents.get(host.id) ?? []).map(dep => (
+                    <div
+                      key={dep.id}
+                      className="pl-8 pr-5 py-2 border-b border-gray-50 flex items-center gap-2 bg-gray-50"
+                    >
+                      <span className="text-xs text-gray-400 mr-0.5">↳</span>
+                      <span className="text-sm text-gray-600">{dep.name}</span>
+                      <span className="text-xs text-gray-400">
+                        {dep.relationship_type === 'child' ? 'child' : '+1'}
+                      </span>
+                      {dep.needs_consideration && (
+                        <span className="ml-auto text-xs text-amber-500">⚑</span>
+                      )}
+                    </div>
+                  ))}
+                </li>
+              ))
+            })()}
           </ul>
         )}
       </div>
