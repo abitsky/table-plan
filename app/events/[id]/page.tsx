@@ -1,8 +1,9 @@
 import { supabase } from '@/lib/supabase'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import type { Guest } from '@/lib/types'
+import type { Guest, Table } from '@/lib/types'
 import GuestList from './GuestList'
+import TableCanvas from './TableCanvas'
 
 export default async function EventWorkspace({
   params,
@@ -11,9 +12,10 @@ export default async function EventWorkspace({
 }) {
   const { id } = await params
 
-  const [{ data: event }, { data: eventGuests }] = await Promise.all([
+  const [{ data: event }, { data: eventGuests }, { data: tables }] = await Promise.all([
     supabase.from('events').select('*, projects(id, name)').eq('id', id).single(),
     supabase.from('event_guests').select('guests(*)').eq('event_id', id),
+    supabase.from('tables').select('*').eq('event_id', id).order('created_at'),
   ])
 
   if (!event) notFound()
@@ -34,13 +36,7 @@ export default async function EventWorkspace({
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <main className="flex-1 flex items-center justify-center text-gray-400 border-r border-gray-200">
-          <div className="text-center">
-            <p className="text-sm">Tables will appear here</p>
-            <p className="text-xs text-gray-300 mt-1">Coming in the next step</p>
-          </div>
-        </main>
-
+        <TableCanvas eventId={id} initialTables={(tables ?? []) as Table[]} />
         <GuestList eventId={id} projectId={event.project_id} initialGuests={guests} />
       </div>
     </div>
