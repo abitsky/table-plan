@@ -95,35 +95,41 @@ export default function TableCanvas({ eventId, initialTables }: Props) {
           Tables
           {tables.length > 0 && <span className="ml-1.5 text-gray-400 font-normal">{tables.length}</span>}
         </span>
-        {step === 'idle' ? (
-          <button
-            onClick={openAdd}
-            className="text-xs text-gray-500 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-100 transition-colors font-medium"
-          >
-            + Add table
-          </button>
-        ) : (
-          <button onClick={cancel} className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1">
-            Cancel
-          </button>
-        )}
-      </div>
-
-      {/* Step 1: shape picker */}
-      {step === 'shape' && (
-        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-6">
-          {SHAPES.map(s => (
+        <div className="relative">
+          {step === 'idle' && (
             <button
-              key={s.value}
-              onClick={() => pickShape(s.value)}
-              className="group flex flex-col items-center gap-2"
+              onClick={openAdd}
+              className="text-xs text-gray-500 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-100 transition-colors font-medium"
             >
-              <ShapeIcon shape={s.value} />
-              <span className="text-xs text-gray-500 group-hover:text-gray-800">{s.label}</span>
+              + Add table
             </button>
-          ))}
+          )}
+          {step === 'shape' && (
+            <>
+              <button onClick={cancel} className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1">
+                Cancel
+              </button>
+              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 py-1 min-w-[140px]">
+                {SHAPES.map(s => (
+                  <button
+                    key={s.value}
+                    onClick={() => pickShape(s.value)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors"
+                  >
+                    <ShapeIcon shape={s.value} />
+                    <span className="text-sm text-gray-700">{s.label}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          {step === 'details' && (
+            <button onClick={cancel} className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1">
+              Cancel
+            </button>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Step 2: details */}
       {step === 'details' && shape && (
