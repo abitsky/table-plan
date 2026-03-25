@@ -41,25 +41,67 @@ function detectHostName(row: Record<string, string>): string {
 
 export default function GuestList({ eventId, projectId, initialGuests }: Props) {
   const [adding, setAdding] = useState(false)
+  const [addMode, setAddMode] = useState<'single' | 'couple'>('single')
   const [newName, setNewName] = useState('')
+  const [partnerName, setPartnerName] = useState('')
   const [saving, setSaving] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importCount, setImportCount] = useState<number | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
+  function openAdd() {
+    setAdding(true)
+    setAddMode('single')
+    setNewName('')
+    setPartnerName('')
+    setImportCount(null)
+  }
+
+  function cancelAdd() {
+    setAdding(false)
+    setNewName('')
+    setPartnerName('')
+  }
+
   async function handleAddGuest() {
     if (!newName.trim() || saving) return
     setSaving(true)
-    const { data: guest } = await supabase
-      .from('guests')
-      .insert({ project_id: projectId, name: newName.trim(), relationship_type: 'primary' })
-      .select('id')
-      .single()
-    if (guest) {
-      await supabase.from('event_guests').insert({ event_id: eventId, guest_id: guest.id })
+
+    if (addMode === 'single') {
+      const { data: guest } = await supabase
+        .from('guests')
+        .insert({ project_id: projectId, name: newName.trim(), relationship_type: 'primary' })
+        .select('id')
+        .single()
+      if (guest) {
+        await supabase.from('event_guests').insert({ event_id: eventId, guest_id: guest.id })
+      }
+    } else {
+      // Insert primary guest first
+      const { data: primary } = await supabase
+        .from('guests')
+        .insert({ project_id: projectId, name: newName.trim(), relationship_type: 'primary' })
+        .select('id')
+        .single()
+      if (primary) {
+        await supabase.from('event_guests').insert({ event_id: eventId, guest_id: primary.id })
+        // Insert partner linked to primary
+        if (partnerName.trim()) {
+          const { data: partner } = await supabase
+            .from('guests')
+            .insert({ project_id: projectId, name: partnerName.trim(), relationship_type: 'plus_one', host_id: primary.id })
+            .select('id')
+            .single()
+          if (partner) {
+            await supabase.from('event_guests').insert({ event_id: eventId, guest_id: partner.id })
+          }
+        }
+      }
     }
+
     setNewName('')
+    setPartnerName('')
     setAdding(false)
     setSaving(false)
     router.refresh()
@@ -142,7 +184,7 @@ export default function GuestList({ eventId, projectId, initialGuests }: Props) 
             Import CSV
           </button>
           <button
-            onClick={() => { setAdding(true); setImportCount(null) }}
+            onClick={openAdd}
             title="Add guest"
             className="text-lg leading-none text-gray-400 hover:text-gray-900 w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 transition-colors"
           >
@@ -161,6 +203,20 @@ export default function GuestList({ eventId, projectId, initialGuests }: Props) 
       <div className="flex-1 overflow-y-auto">
         {adding && (
           <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+            <div className="flex gap-1 mb-3 bg-gray-200 rounded-lg p-0.5">
+              <button
+                onClick={() => setAddMode('single')}
+                className={`flex-1 text-xs py-1 rounded-md font-medium transition-colors ${addMode === 'single' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+              >
+                Single
+              </button>
+              <button
+                onClick={() => setAddMode('couple')}
+                className={`flex-1 text-xs py-1 rounded-md font-medium transition-colors ${addMode === 'couple' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+              >
+                Couple
+              </button>
+            </div>
             <input
               autoFocus
               type="text"
@@ -168,11 +224,24 @@ export default function GuestList({ eventId, projectId, initialGuests }: Props) 
               onChange={e => setNewName(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Enter') handleAddGuest()
-                if (e.key === 'Escape') { setAdding(false); setNewName('') }
+                if (e.key === 'Escape') cancelAdd()
               }}
-              placeholder="Guest name"
+              placeholder={addMode === 'couple' ? 'Person 1' : 'Guest name'}
               className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-gray-900 placeholder-gray-400"
             />
+            {addMode === 'couple' && (
+              <input
+                type="text"
+                value={partnerName}
+                onChange={e => setPartnerName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleAddGuest()
+                  if (e.key === 'Escape') cancelAdd()
+                }}
+                placeholder="Person 2"
+                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 mt-2 focus:outline-none focus:border-gray-900 placeholder-gray-400"
+              />
+            )}
             <div className="flex gap-2 mt-2">
               <button
                 onClick={handleAddGuest}
@@ -182,7 +251,7 @@ export default function GuestList({ eventId, projectId, initialGuests }: Props) 
                 {saving ? 'Adding…' : 'Add'}
               </button>
               <button
-                onClick={() => { setAdding(false); setNewName('') }}
+                onClick={cancelAdd}
                 className="text-xs text-gray-500 px-3 py-1.5 rounded-lg hover:bg-gray-100"
               >
                 Cancel
