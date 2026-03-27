@@ -49,7 +49,7 @@ export default async function ProjectPage({
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200">
         <div className="mx-auto max-w-4xl px-8 py-4 flex items-center justify-between">
-          <Link href="/" className="text-base font-semibold text-gray-900 tracking-tight">PlaceCard</Link>
+          <Link href="/" className="text-xl tracking-widest uppercase" style={{ fontFamily: 'var(--font-cormorant)', color: '#3d3530', letterSpacing: '0.15em' }}>PLACECARD</Link>
           <ClearTestingButton />
         </div>
       </header>

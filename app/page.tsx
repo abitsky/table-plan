@@ -22,7 +22,7 @@ export default async function Dashboard() {
             className="text-xl tracking-widest uppercase"
             style={{ fontFamily: 'var(--font-cormorant)', color: '#3d3530', letterSpacing: '0.15em' }}
           >
-            PlaceCard
+            PLACECARD
           </Link>
           <ClearTestingButton />
         </div>
@@ -60,49 +60,24 @@ export default async function Dashboard() {
             </div>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center text-center" style={{ paddingTop: '6rem', paddingBottom: '6rem' }}>
-            {/* Table setting photo */}
-            <div className="mb-10 overflow-hidden rounded-2xl" style={{ width: 280, height: 210, boxShadow: '0 8px 32px rgba(61,53,48,0.10)' }}>
-              <img
-                src="/table-setting.jpg"
-                alt="Elegant table setting"
-                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 40%' }}
-              />
-            </div>
-
-            {/* Headline */}
-            <h1
-              className="mb-3"
+          <div className="text-center py-12">
+            <h2
+              className="mb-2"
               style={{
                 fontFamily: 'var(--font-cormorant)',
-                fontSize: '2.75rem',
+                fontSize: '2rem',
                 fontWeight: 400,
                 color: '#3d3530',
                 letterSpacing: '0.05em',
-                lineHeight: 1.15,
               }}
             >
-              PlaceCard
-            </h1>
-
-            {/* Tagline */}
-            <p
-              className="mb-10 italic"
-              style={{
-                fontFamily: 'var(--font-cormorant)',
-                fontSize: '1.15rem',
-                color: '#8a7f74',
-                letterSpacing: '0.02em',
-              }}
-            >
-              Every seat, thoughtfully placed.
-            </p>
-
-            {/* CTA */}
+              Welcome to PlaceCard
+            </h2>
+            <p className="mb-8" style={{ color: '#8a7f74' }}>Plan your seating chart in minutes.</p>
             <Link
               href="/projects/new"
-              className="inline-block px-8 py-3 rounded-lg transition-opacity font-medium tracking-wide text-sm"
-              style={{ backgroundColor: '#c9a96e', color: 'white', letterSpacing: '0.06em' }}
+              className="inline-block px-8 py-3 rounded-lg font-medium text-sm transition-opacity"
+              style={{ backgroundColor: '#3d3530', color: '#faf8f5' }}
             >
               Start planning
             </Link>
