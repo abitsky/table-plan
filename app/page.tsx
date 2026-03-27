@@ -71,7 +71,7 @@ export default async function Dashboard() {
                 letterSpacing: '0.05em',
               }}
             >
-              Welcome to PlaceCard
+              Welcome to PLACECARD
             </h2>
             <p className="mb-8" style={{ color: '#8a7f74' }}>Plan your seating chart in minutes.</p>
             <Link
