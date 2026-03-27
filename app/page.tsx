@@ -36,18 +36,21 @@ export default async function Dashboard() {
             <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">Your plans</h2>
             <div className="space-y-2">
               {(projects as Project[]).map((project) => (
-                <Link
-                  key={project.id}
-                  href={`/projects/${project.id}`}
-                  className="block bg-white border border-gray-200 rounded-xl px-6 py-4 hover:border-gray-400 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
+                <div key={project.id} className="bg-white border border-gray-200 rounded-xl px-6 py-4 hover:border-gray-400 transition-colors flex items-center justify-between">
+                  <Link href={`/projects/${project.id}`} className="flex-1">
                     <span className="text-gray-900 font-medium">{project.name}</span>
-                    <span className="text-xs text-gray-400">
-                      {project.type === 'single' ? 'Single event' : 'Multiple events'}
-                    </span>
-                  </div>
-                </Link>
+                  </Link>
+                  {project.type === 'multi' ? (
+                    <Link
+                      href={`/projects/${project.id}/events/new`}
+                      className="text-xs text-gray-400 hover:text-gray-900 transition-colors ml-4"
+                    >
+                      + Add event
+                    </Link>
+                  ) : (
+                    <span className="text-xs text-gray-400 ml-4">Single event</span>
+                  )}
+                </div>
               ))}
             </div>
           </div>
