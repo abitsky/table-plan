@@ -1,5 +1,4 @@
 import { supabase } from '@/lib/supabase'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Project } from '@/lib/types'
 import ClearTestingButton from './ClearTestingButton'
@@ -9,17 +8,6 @@ export default async function Dashboard() {
     .from('projects')
     .select('*')
     .order('created_at', { ascending: false })
-
-  // Single-event user with exactly one project: go straight to their workspace
-  if (projects && projects.length === 1 && projects[0].type === 'single') {
-    const { data: event } = await supabase
-      .from('events')
-      .select('id')
-      .eq('project_id', projects[0].id)
-      .limit(1)
-      .single()
-    if (event) redirect(`/events/${event.id}`)
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
