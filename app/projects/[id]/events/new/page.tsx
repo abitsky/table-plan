@@ -31,7 +31,7 @@ export default function NewEvent({
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <header className="bg-white border-b border-gray-200">
         <div className="mx-auto max-w-4xl px-8 py-4">
-          <Link href={`/projects/${projectId}`} className="text-base font-semibold text-gray-900 tracking-tight">PlaceCard</Link>
+          <Link href="/" className="text-base font-semibold text-gray-900 tracking-tight">PlaceCard</Link>
         </div>
       </header>
 
