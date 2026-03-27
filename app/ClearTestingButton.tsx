@@ -13,13 +13,15 @@ export default function ClearTestingButton() {
     if (!ok) return
     setClearing(true)
 
-    // Delete in dependency order so foreign keys don't complain
-    await supabase.from('seat_assignments').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-    await supabase.from('event_guests').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-    await supabase.from('tables').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-    await supabase.from('events').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-    await supabase.from('guests').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-    await supabase.from('projects').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    // Guests and projects are the two root tables — everything else cascades from them
+    const { error: gErr } = await supabase.from('guests').delete().gte('created_at', '1970-01-01')
+    const { error: pErr } = await supabase.from('projects').delete().gte('created_at', '1970-01-01')
+
+    if (gErr || pErr) {
+      window.alert(`Clear failed: ${(gErr || pErr)?.message}`)
+      setClearing(false)
+      return
+    }
 
     setClearing(false)
     router.push('/')
