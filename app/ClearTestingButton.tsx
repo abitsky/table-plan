@@ -24,7 +24,7 @@ export default function ClearTestingButton() {
     }
 
     setClearing(false)
-    window.location.href = '/'
+    window.location.href = '/dashboard'
   }
 
   return (

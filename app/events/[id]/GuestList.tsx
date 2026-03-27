@@ -24,7 +24,7 @@ function detectName(row: Record<string, string>): string {
   const firstKey = keys.find(k => /^first[\s_]?name$/i.test(k))
   const lastKey = keys.find(k => /^last[\s_]?name$/i.test(k))
   if (firstKey && lastKey) return `${row[firstKey]} ${row[lastKey]}`.trim()
-  const nameKey = keys.find(k => /^(full[\s_]?)?name$/i.test(k))
+  const nameKey = keys.find(k => /^(full[\s_]?)?(name|guest)$/i.test(k))
   if (nameKey) return row[nameKey].trim()
   return Object.values(row)[0]?.trim() ?? ''
 }
@@ -116,6 +116,14 @@ function DraggableGuestRow({ guest, deps, isHighlighted }: { guest: Guest; deps:
           isHighlighted ? 'bg-amber-100' : ''
         }`}
       >
+        <svg width="6" height="10" viewBox="0 0 6 10" className="flex-shrink-0 text-gray-300">
+          <circle cx="1" cy="1" r="1" fill="currentColor" />
+          <circle cx="5" cy="1" r="1" fill="currentColor" />
+          <circle cx="1" cy="5" r="1" fill="currentColor" />
+          <circle cx="5" cy="5" r="1" fill="currentColor" />
+          <circle cx="1" cy="9" r="1" fill="currentColor" />
+          <circle cx="5" cy="9" r="1" fill="currentColor" />
+        </svg>
         <span className="text-sm text-gray-800">{guest.name}</span>
         {guest.needs_consideration && (
           <span className="ml-auto text-xs text-amber-500">⚑</span>
@@ -243,30 +251,54 @@ export default function GuestList({ eventId, projectId, initialGuests, assignmen
         const parsed: ParsedGuest[] = []
 
         for (const row of rows) {
-          const primaryName = detectName(row)
-          if (!primaryName) continue
+          const rawName = detectName(row)
+          if (!rawName) continue
 
-          parsed.push({ name: primaryName, relationship_type: 'primary', primaryName: '' })
+          // The Knot style: "Michael Jordan & Sarah Jordan" or "Michael Jordan & Plus One"
+          const ampersandNames = rawName.includes(' & ')
+            ? rawName.split(/\s*&\s*/).map(n => n.trim()).filter(Boolean)
+            : null
 
-          const partnerFirst = row['Partner First Name']?.trim()
-          const partnerLast = row['Partner Last Name']?.trim()
-          if (partnerFirst) {
-            parsed.push({
-              name: `${partnerFirst} ${partnerLast ?? ''}`.trim(),
-              relationship_type: 'plus_one',
-              primaryName,
-            })
-          }
+          if (ampersandNames && ampersandNames.length > 1) {
+            const primary = ampersandNames[0]
+            parsed.push({ name: primary, relationship_type: 'primary', primaryName: '' })
 
-          for (let i = 1; i <= 5; i++) {
-            const childFirst = row[`Child ${i} First Name`]?.trim()
-            const childLast = row[`Child ${i} Last Name`]?.trim()
-            if (childFirst) {
+            for (let i = 1; i < ampersandNames.length; i++) {
+              const n = ampersandNames[i]
+              const isPlusOne = /^plus\s*one$/i.test(n)
               parsed.push({
-                name: `${childFirst} ${childLast ?? ''}`.trim(),
-                relationship_type: 'child',
+                name: isPlusOne ? `${primary.split(' ')[0]}'s Plus One` : n,
+                relationship_type: i === 1 ? 'plus_one' : 'child',
+                primaryName: primary,
+              })
+            }
+          } else {
+            // Standard format: one guest per row
+            const primaryName = rawName
+            parsed.push({ name: primaryName, relationship_type: 'primary', primaryName: '' })
+
+            // Zola-style partner columns
+            const partnerFirst = row['Partner First Name']?.trim()
+            const partnerLast = row['Partner Last Name']?.trim()
+            if (partnerFirst) {
+              parsed.push({
+                name: `${partnerFirst} ${partnerLast ?? ''}`.trim(),
+                relationship_type: 'plus_one',
                 primaryName,
               })
+            }
+
+            // Zola-style child columns
+            for (let i = 1; i <= 5; i++) {
+              const childFirst = row[`Child ${i} First Name`]?.trim()
+              const childLast = row[`Child ${i} Last Name`]?.trim()
+              if (childFirst) {
+                parsed.push({
+                  name: `${childFirst} ${childLast ?? ''}`.trim(),
+                  relationship_type: 'child',
+                  primaryName,
+                })
+              }
             }
           }
         }

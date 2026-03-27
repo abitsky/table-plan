@@ -41,15 +41,15 @@ function ShapeButton({ shape, onClick }: { shape: TableShape; onClick: () => voi
     <button
       onClick={onClick}
       title={SHAPES.find(s => s.value === shape)?.label}
-      className="w-9 h-9 flex items-center justify-center bg-gray-100 border border-transparent rounded-lg hover:bg-white hover:border-gray-400 transition-colors"
+      className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 bg-white hover:border-gray-400 hover:shadow-sm transition-all"
     >
       <ShapePreview shape={shape} dark />
     </button>
   )
 }
 
-function ShapePreview({ shape, dark, accent }: { shape: TableShape; dark?: boolean; accent?: boolean }) {
-  const fill = accent ? 'bg-indigo-500' : dark ? 'bg-gray-900' : 'bg-gray-300'
+function ShapePreview({ shape, dark, accent, light }: { shape: TableShape; dark?: boolean; accent?: boolean; light?: boolean }) {
+  const fill = light ? 'bg-[#a89b8f]' : accent ? 'bg-indigo-500' : dark ? 'bg-[#3d3530]' : 'bg-gray-300'
   if (shape === 'rectangular') return <div className={`${fill} rounded w-9 h-6`} />
   if (shape === 'round') return <div className={`${fill} rounded-full w-7 h-7`} />
   return <div className={`${fill} rounded-[50%] w-10 h-6`} />
@@ -96,7 +96,7 @@ function DraggableSeat({
       }`}
       suppressHydrationWarning
     >
-      {guest && !isDragging ? guest.name.split(' ')[0].slice(0, 7) : ''}
+      {guest && !isDragging ? guest.name.split(' ')[0].slice(0, 4) : ''}
     </div>
   )
 }
@@ -273,9 +273,9 @@ function DroppableTableCard({
   if (isExpanded) {
     const shapeClass =
       table.shape === 'round'
-        ? `${base} relative rounded-full p-4 cursor-pointer`
+        ? `${base} relative rounded-full p-4 overflow-hidden cursor-pointer`
         : table.shape === 'oval'
-        ? `${base} relative rounded-[50%] p-4 cursor-pointer`
+        ? `${base} relative rounded-[50%] p-4 overflow-hidden cursor-pointer`
         : `${base} relative rounded-xl p-4 cursor-pointer`
 
     return (
@@ -310,11 +310,12 @@ function DroppableTableCard({
                 if (e.key === 'Enter') saveName()
                 if (e.key === 'Escape') { setNameValue(table.name); setEditingName(false) }
               }}
-              className="text-sm font-semibold text-center border-b border-gray-400 bg-transparent outline-none w-full"
+              className="text-base font-bold text-center border-b border-gray-400 bg-transparent outline-none w-full"
             />
           ) : (
             <span
-              className={`text-sm font-semibold text-gray-800 text-center leading-tight break-words w-full ${isSelected ? 'hover:text-gray-500 cursor-text' : ''}`}
+              className={`text-base font-bold text-center leading-tight break-words w-full ${isSelected ? 'hover:text-gray-500 cursor-text' : ''}`}
+              style={{ color: '#3d3530' }}
               onClick={isSelected ? () => setEditingName(true) : undefined}
             >
               {nameValue}
@@ -401,16 +402,18 @@ function DroppableTableCard({
 
         {/* Delete controls */}
         {isSelected && (
-          <div className="mt-3" onClick={e => e.stopPropagation()}>
+          <div className="mt-1" onClick={e => e.stopPropagation()}>
             {confirmDelete ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500">Delete table?</span>
-                <button onClick={onDelete} className="text-xs text-red-500 font-medium hover:text-red-700">Yes</button>
-                <button onClick={() => setConfirmDelete(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+              <div className="flex items-center justify-center gap-1.5">
+                <button onClick={onDelete} className="text-[10px] text-red-500 font-medium hover:text-red-700 transition-colors">Delete</button>
+                <span className="text-gray-300">·</span>
+                <button onClick={() => setConfirmDelete(false)} className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors">Cancel</button>
               </div>
             ) : (
-              <button onClick={() => setConfirmDelete(true)} className="text-xs text-gray-300 hover:text-red-400 transition-colors">
-                Delete table
+              <button onClick={() => setConfirmDelete(true)} className="text-gray-300 hover:text-red-400 transition-colors">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 4h12M5.33 4V2.67a1.33 1.33 0 011.34-1.34h2.66a1.33 1.33 0 011.34 1.34V4M13 4v9.33a1.33 1.33 0 01-1.33 1.34H4.33A1.33 1.33 0 013 13.33V4" />
+                </svg>
               </button>
             )}
           </div>
@@ -422,9 +425,9 @@ function DroppableTableCard({
   // Compact view
   const shapeClass =
     table.shape === 'round'
-      ? `${base} relative rounded-3xl w-48 min-h-[10rem] py-4 cursor-pointer`
+      ? `${base} relative rounded-full w-44 h-44 overflow-hidden cursor-pointer`
       : table.shape === 'oval'
-      ? `${base} relative rounded-[50%] w-64 min-h-[10rem] py-4 cursor-pointer`
+      ? `${base} relative rounded-[50%] w-64 min-h-[10rem] py-4 overflow-hidden cursor-pointer`
       : `${base} relative rounded-xl w-60 min-h-[10rem] py-3 cursor-pointer`
 
   const assignedNames = seatGuests.filter(Boolean).map(g => shortName(g!.name))
@@ -445,9 +448,9 @@ function DroppableTableCard({
         {assignedCount}/{totalCapacity}
       </span>
       {assignedNames.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap justify-center gap-0.5 px-2 max-w-full">
+        <div className="mt-1.5 flex flex-wrap justify-center gap-0.5 px-4 max-w-[70%]">
           {assignedNames.map((name, i) => (
-            <span key={i} className="text-[10px] text-gray-500 bg-gray-100 rounded px-1 leading-5">
+            <span key={i} className="text-[10px] text-gray-500 bg-gray-100 rounded px-1 leading-5 truncate max-w-[4.5rem]">
               {name}
             </span>
           ))}
@@ -527,7 +530,7 @@ export default function TableCanvas({ eventId, tables, assignments, guests, isDr
   }
 
   return (
-    <div className="flex-1 flex flex-col border-r border-gray-200 overflow-hidden">
+    <div className="flex-1 flex flex-col border-r border-gray-200 overflow-hidden relative">
       {/* Header */}
       <div className="px-5 py-3 border-b border-gray-100 bg-white flex items-center flex-shrink-0">
         <span className="text-sm font-semibold text-gray-700">
@@ -577,16 +580,16 @@ export default function TableCanvas({ eventId, tables, assignments, guests, isDr
               <div className="absolute bg-gray-900 rounded-xl" style={{ width: 140, height: 80, top: '68%', left: '44%', transform: 'translateX(-50%)' }} />
               <div className="absolute bg-gray-900 rounded-full" style={{ width: 96, height: 96, top: '68%', right: '22%' }} />
             </div>
-            <p className="text-sm text-gray-400 relative z-10">Pick a shape below to add your first table</p>
+            <p className="text-sm font-medium relative z-10" style={{ color: '#3d3530' }}>Pick a shape below to add your first table</p>
           </div>
         )}
       </div>
 
-      {/* Editing bar */}
-      <div className="px-4 py-3 flex-shrink-0">
+      {/* Floating toolbar */}
+      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-20">
         {step === 'shapes' && (
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] font-medium text-gray-400 uppercase tracking-widest">Add table</span>
+          <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-white border border-gray-200 shadow-sm">
+            <span className="text-[10px] font-medium uppercase tracking-widest text-gray-400 mr-1">Add table</span>
             {SHAPES.map(s => (
               <ShapeButton key={s.value} shape={s.value} onClick={() => pickShape(s.value)} />
             ))}
@@ -594,10 +597,10 @@ export default function TableCanvas({ eventId, tables, assignments, guests, isDr
         )}
 
         {step === 'details' && shape && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-gray-200 shadow-sm">
             <button onClick={cancel} className="flex items-center gap-1.5 flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors" title="Back to shape picker">
               <span className="text-sm">←</span>
-              <ShapePreview shape={shape} accent />
+              <ShapePreview shape={shape} dark />
             </button>
             <div className="w-px h-8 bg-gray-200 flex-shrink-0 mx-1" />
             <input
@@ -610,15 +613,15 @@ export default function TableCanvas({ eventId, tables, assignments, guests, isDr
                 if (e.key === 'Escape') cancel()
               }}
               placeholder="Table name"
-              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:border-gray-900 w-28 flex-shrink-0"
+              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-gray-400 w-28 flex-shrink-0 text-gray-700"
             />
             <div className="w-px h-8 bg-gray-200 flex-shrink-0 mx-1" />
             <div className="flex items-center gap-1 flex-shrink-0">
               <button
                 onClick={() => setCapacity(c => Math.max(1, c - 1))}
-                className="w-7 h-7 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-sm text-gray-500 hover:text-gray-700 transition-colors font-medium"
+                className="w-7 h-7 flex items-center justify-center bg-gray-50 hover:bg-gray-100 rounded text-sm text-gray-500 hover:text-gray-700 transition-colors font-medium"
               >−</button>
-              <div className="flex items-center border border-gray-300 rounded px-2 py-1 focus-within:border-gray-900 bg-white gap-1">
+              <div className="flex items-center border border-gray-200 rounded px-2 py-1 focus-within:border-gray-400 bg-white gap-1">
                 <input
                   type="text"
                   inputMode="numeric"
@@ -631,13 +634,13 @@ export default function TableCanvas({ eventId, tables, assignments, guests, isDr
                     if (e.key === 'Enter') handleAdd()
                     if (e.key === 'Escape') cancel()
                   }}
-                  className="text-sm text-center bg-transparent outline-none w-6 tabular-nums"
+                  className="text-sm text-center bg-transparent outline-none w-6 tabular-nums text-gray-700"
                 />
                 <span className="text-xs text-gray-400 select-none">seats</span>
               </div>
               <button
                 onClick={() => setCapacity(c => Math.min(30, c + 1))}
-                className="w-7 h-7 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-sm text-gray-500 hover:text-gray-700 transition-colors font-medium"
+                className="w-7 h-7 flex items-center justify-center bg-gray-50 hover:bg-gray-100 rounded text-sm text-gray-500 hover:text-gray-700 transition-colors font-medium"
               >+</button>
             </div>
             {shape === 'rectangular' && (
@@ -646,15 +649,15 @@ export default function TableCanvas({ eventId, tables, assignments, guests, isDr
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button
                     onClick={() => setHeadSeats(h => Math.max(0, h - 1))}
-                    className="w-7 h-7 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-sm text-gray-500 hover:text-gray-700 transition-colors font-medium"
+                    className="w-7 h-7 flex items-center justify-center bg-gray-50 hover:bg-gray-100 rounded text-sm text-gray-500 hover:text-gray-700 transition-colors font-medium"
                   >−</button>
-                  <div className="flex items-center border border-gray-300 rounded px-2 py-1 bg-white gap-1">
-                    <span className="text-sm text-center tabular-nums w-4">{headSeats}</span>
+                  <div className="flex items-center border border-gray-200 rounded px-2 py-1 bg-white gap-1">
+                    <span className="text-sm text-center tabular-nums w-4 text-gray-700">{headSeats}</span>
                     <span className="text-xs text-gray-400 select-none">heads</span>
                   </div>
                   <button
                     onClick={() => setHeadSeats(h => Math.min(2, h + 1))}
-                    className="w-7 h-7 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-sm text-gray-500 hover:text-gray-700 transition-colors font-medium"
+                    className="w-7 h-7 flex items-center justify-center bg-gray-50 hover:bg-gray-100 rounded text-sm text-gray-500 hover:text-gray-700 transition-colors font-medium"
                   >+</button>
                 </div>
               </>
@@ -662,7 +665,8 @@ export default function TableCanvas({ eventId, tables, assignments, guests, isDr
             <button
               onClick={handleAdd}
               disabled={!name.trim() || saving}
-              className="text-xs bg-gray-900 text-white px-3 py-1.5 rounded-lg disabled:opacity-40 hover:bg-gray-700 transition-colors flex-shrink-0"
+              className="text-xs px-3 py-1.5 rounded-lg disabled:opacity-40 hover:opacity-90 transition-colors flex-shrink-0 font-medium text-white"
+              style={{ backgroundColor: '#3d3530' }}
             >
               {saving ? 'Adding...' : 'Add'}
             </button>

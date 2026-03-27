@@ -467,6 +467,13 @@ export default function SeatingWorkspace({
       next.set(deps[0].id, { tableId: targetTableId, seatNumber: depSeat })
       upserts.push({ guestId: deps[0].id, tableId: targetTableId, seatNumber: depSeat })
     }
+    // Seat remaining dependents (3+ person groups like families)
+    for (let i = 1; i < deps.length; i++) {
+      const seat = findEmptySeat(targetTableId, tableTotal, next)
+      if (seat == null) break
+      next.set(deps[i].id, { tableId: targetTableId, seatNumber: seat })
+      upserts.push({ guestId: deps[i].id, tableId: targetTableId, seatNumber: seat })
+    }
 
     // --- Handle displaced occupants ---
     processedGroups.clear()

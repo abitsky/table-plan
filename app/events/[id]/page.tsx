@@ -47,7 +47,7 @@ export default async function EventWorkspace({
     <div className="h-screen flex flex-col bg-gray-50">
       <header className="bg-white border-b border-gray-200 flex-shrink-0">
         <div className="px-6 py-3 flex items-center gap-2 text-sm">
-          <Link href="/" className="tracking-widest uppercase" style={{ fontFamily: 'var(--font-cormorant)', color: '#3d3530', letterSpacing: '0.15em', fontSize: '1rem' }}>PLACECARD</Link>
+          <Link href="/dashboard" className="tracking-widest uppercase" style={{ fontFamily: 'var(--font-cormorant)', color: '#3d3530', letterSpacing: '0.15em', fontSize: '1rem' }}>PLACECARD</Link>
           <span className="text-gray-300">/</span>
           <Link href={`/projects/${project.id}`} className="text-gray-500 hover:text-gray-700">{project.name}</Link>
           <span className="text-gray-300">/</span>

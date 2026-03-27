@@ -20,7 +20,7 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "PlaceCard",
+  title: "PLACECARD",
   description: "Event seating, made simple.",
 };
 
