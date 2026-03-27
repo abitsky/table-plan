@@ -1,10 +1,12 @@
 export type EventType = 'wedding' | 'dinner_party' | 'charity_gala'
 export type RelationshipType = 'primary' | 'plus_one' | 'child'
 export type TableShape = 'round' | 'rectangular' | 'oval'
+export type ProjectType = 'single' | 'multi'
 
 export interface Project {
   id: string
   name: string
+  type: ProjectType
   created_at: string
 }
 
@@ -42,6 +44,7 @@ export interface Table {
   name: string
   shape: TableShape
   capacity: number
+  head_seats: number
   created_at: string
 }
 
@@ -50,4 +53,5 @@ export interface SeatAssignment {
   event_id: string
   guest_id: string
   table_id: string | null
+  seat_number: number | null
 }

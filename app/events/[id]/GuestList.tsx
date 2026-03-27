@@ -2,16 +2,20 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useDraggable } from '@dnd-kit/core'
+import { useDraggable, useDroppable } from '@dnd-kit/core'
 import Papa from 'papaparse'
 import { supabase } from '@/lib/supabase'
 import type { Guest, RelationshipType } from '@/lib/types'
+
+import type { SeatInfo } from './SeatingWorkspace'
 
 interface Props {
   eventId: string
   projectId: string
   initialGuests: Guest[]
-  assignments: Map<string, string>
+  assignments: Map<string, SeatInfo>
+  highlightedGuestIds: Set<string>
+  tables: import('@/lib/types').Table[]
 }
 
 function detectName(row: Record<string, string>): string {
@@ -24,31 +28,40 @@ function detectName(row: Record<string, string>): string {
   return Object.values(row)[0]?.trim() ?? ''
 }
 
-function detectRelationship(row: Record<string, string>): RelationshipType {
-  const typeKey = Object.keys(row).find(k => /^(guest[\s_]?type|type|relationship)$/i.test(k))
-  if (typeKey) {
-    const val = row[typeKey].toLowerCase()
-    if (val.includes('plus') || val.includes('+1')) return 'plus_one'
-    if (val.includes('child') || val.includes('kid')) return 'child'
-  }
-  const guestOfKey = Object.keys(row).find(k => /^guest[\s_]?of$/i.test(k))
-  if (guestOfKey && row[guestOfKey]?.trim()) return 'plus_one'
-  return 'primary'
+
+function DraggableDepRow({ dep }: { dep: Guest }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: dep.id })
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{ opacity: isDragging ? 0.3 : 1 }}
+      className="pl-8 pr-5 py-2 border-b border-gray-50 flex items-center gap-2 bg-gray-50 cursor-grab active:cursor-grabbing"
+    >
+      <span className="text-xs text-gray-400 mr-0.5">↳</span>
+      <span className="text-sm text-gray-600">{dep.name}</span>
+      {dep.relationship_type === 'child' && (
+        <span className="text-xs text-gray-400">child</span>
+      )}
+      {dep.needs_consideration && (
+        <span className="ml-auto text-xs text-amber-500">⚑</span>
+      )}
+    </div>
+  )
 }
 
-function detectHostName(row: Record<string, string>): string {
-  const guestOfKey = Object.keys(row).find(k => /^guest[\s_]?of$/i.test(k))
-  return guestOfKey ? (row[guestOfKey] ?? '').trim() : ''
-}
-
-function DraggableGuestRow({ guest, deps }: { guest: Guest; deps: Guest[] }) {
+function DraggableGuestRow({ guest, deps, isHighlighted }: { guest: Guest; deps: Guest[]; isHighlighted: boolean }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: guest.id })
   return (
     <li ref={setNodeRef} style={{ opacity: isDragging ? 0.3 : 1 }}>
       <div
         {...listeners}
         {...attributes}
-        className="px-5 py-2.5 border-b border-gray-50 flex items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-gray-50 transition-colors"
+        suppressHydrationWarning
+        className={`px-5 py-2.5 border-b border-gray-50 flex items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-gray-50 transition-colors duration-1000 ${
+          isHighlighted ? 'bg-amber-100' : ''
+        }`}
       >
         <span className="text-sm text-gray-800">{guest.name}</span>
         {guest.needs_consideration && (
@@ -56,25 +69,13 @@ function DraggableGuestRow({ guest, deps }: { guest: Guest; deps: Guest[] }) {
         )}
       </div>
       {deps.map(dep => (
-        <div
-          key={dep.id}
-          className="pl-8 pr-5 py-2 border-b border-gray-50 flex items-center gap-2 bg-gray-50"
-        >
-          <span className="text-xs text-gray-400 mr-0.5">↳</span>
-          <span className="text-sm text-gray-600">{dep.name}</span>
-          <span className="text-xs text-gray-400">
-            {dep.relationship_type === 'child' ? 'child' : '+1'}
-          </span>
-          {dep.needs_consideration && (
-            <span className="ml-auto text-xs text-amber-500">⚑</span>
-          )}
-        </div>
+        <DraggableDepRow key={dep.id} dep={dep} />
       ))}
     </li>
   )
 }
 
-export default function GuestList({ eventId, projectId, initialGuests, assignments }: Props) {
+export default function GuestList({ eventId, projectId, initialGuests, assignments, highlightedGuestIds, tables }: Props) {
   const [adding, setAdding] = useState(false)
   const [addMode, setAddMode] = useState<'single' | 'couple'>('couple')
   const [newName, setNewName] = useState('')
@@ -82,8 +83,11 @@ export default function GuestList({ eventId, projectId, initialGuests, assignmen
   const [saving, setSaving] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importCount, setImportCount] = useState<number | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
+
+  const tableNameById = new Map(tables.map(t => [t.id, t.name]))
 
   function openAdd() {
     setAdding(true)
@@ -154,17 +158,60 @@ export default function GuestList({ eventId, projectId, initialGuests, assignmen
         const rows = results.data as Record<string, string>[]
         if (!rows.length) { setImporting(false); return }
 
-        const parsed = rows
-          .map(row => ({
-            name: detectName(row),
-            relationship_type: detectRelationship(row),
-            hostName: detectHostName(row),
-          }))
-          .filter(g => g.name.length > 0)
+        type ParsedGuest = { name: string; relationship_type: RelationshipType; primaryName: string }
+        const parsed: ParsedGuest[] = []
+
+        for (const row of rows) {
+          const primaryName = detectName(row)
+          if (!primaryName) continue
+
+          parsed.push({ name: primaryName, relationship_type: 'primary', primaryName: '' })
+
+          const partnerFirst = row['Partner First Name']?.trim()
+          const partnerLast = row['Partner Last Name']?.trim()
+          if (partnerFirst) {
+            parsed.push({
+              name: `${partnerFirst} ${partnerLast ?? ''}`.trim(),
+              relationship_type: 'plus_one',
+              primaryName,
+            })
+          }
+
+          for (let i = 1; i <= 5; i++) {
+            const childFirst = row[`Child ${i} First Name`]?.trim()
+            const childLast = row[`Child ${i} Last Name`]?.trim()
+            if (childFirst) {
+              parsed.push({
+                name: `${childFirst} ${childLast ?? ''}`.trim(),
+                relationship_type: 'child',
+                primaryName,
+              })
+            }
+          }
+        }
+
+        // Fetch existing guests to avoid duplicates on re-import
+        const { data: existingGuests } = await supabase
+          .from('guests')
+          .select('id, name')
+          .eq('project_id', projectId)
+
+        const existingNameToId = new Map(
+          (existingGuests ?? []).map(g => [g.name.toLowerCase().trim(), g.id])
+        )
+
+        const toInsert = parsed.filter(g => !existingNameToId.has(g.name.toLowerCase().trim()))
+
+        if (!toInsert.length) {
+          setImportCount(0)
+          setImporting(false)
+          router.refresh()
+          return
+        }
 
         const { data: inserted } = await supabase
           .from('guests')
-          .insert(parsed.map(g => ({
+          .insert(toInsert.map(g => ({
             project_id: projectId,
             name: g.name,
             relationship_type: g.relationship_type,
@@ -173,14 +220,20 @@ export default function GuestList({ eventId, projectId, initialGuests, assignmen
 
         if (!inserted) { setImporting(false); return }
 
-        const nameToId = new Map(inserted.map(g => [g.name.toLowerCase(), g.id]))
-        const updates = parsed
-          .map((g, i) => ({ hostName: g.hostName, guestId: inserted[i]?.id }))
-          .filter(u => u.hostName && u.guestId)
-        for (const u of updates) {
-          const hostId = nameToId.get(u.hostName.toLowerCase())
-          if (hostId) {
-            await supabase.from('guests').update({ host_id: hostId }).eq('id', u.guestId)
+        // Include existing guests in the name map so host_id links work even
+        // when the primary already existed from a previous import
+        const allNameToId = new Map([
+          ...existingNameToId,
+          ...inserted.map(g => [g.name.toLowerCase().trim(), g.id] as [string, string]),
+        ])
+
+        for (let i = 0; i < toInsert.length; i++) {
+          const g = toInsert[i]
+          if (!g.primaryName) continue
+          const hostId = allNameToId.get(g.primaryName.toLowerCase().trim())
+          const guestId = inserted[i]?.id
+          if (hostId && guestId) {
+            await supabase.from('guests').update({ host_id: hostId }).eq('id', guestId)
           }
         }
 
@@ -209,12 +262,21 @@ export default function GuestList({ eventId, projectId, initialGuests, assignmen
   }
   primaries.sort((a, b) => a.name.localeCompare(b.name))
 
-  // Only show primaries that haven't been assigned to a table
   const unassigned = primaries.filter(g => !assignments.has(g.id))
   const assignedCount = primaries.length - unassigned.length
 
+  const query = searchQuery.trim().toLowerCase()
+  const searchResults = query
+    ? primaries.filter(g => {
+        if (g.name.toLowerCase().includes(query)) return true
+        return (dependents.get(g.id) ?? []).some(d => d.name.toLowerCase().includes(query))
+      })
+    : []
+
+  const { setNodeRef: setDropRef, isOver: isDropOver } = useDroppable({ id: 'guest-list' })
+
   return (
-    <aside className="w-72 bg-white flex flex-col flex-shrink-0">
+    <aside ref={setDropRef} className={`w-72 bg-white flex flex-col flex-shrink-0 transition-colors duration-200 ${isDropOver ? 'bg-blue-50' : ''}`}>
       <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-gray-700">
           Guests
@@ -236,9 +298,9 @@ export default function GuestList({ eventId, projectId, initialGuests, assignmen
           <button
             onClick={openAdd}
             title="Add guest"
-            className="text-lg leading-none text-gray-400 hover:text-gray-900 w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 transition-colors"
+            className="text-xs text-gray-500 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-100 transition-colors font-medium"
           >
-            +
+            + Add
           </button>
         </div>
         <input
@@ -250,8 +312,67 @@ export default function GuestList({ eventId, projectId, initialGuests, assignmen
         />
       </div>
 
+      {/* Search — always present, underline style */}
+      <div className="px-4 py-2 border-b border-gray-100 flex items-center gap-2">
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="#9ca3af" strokeWidth="1.8" strokeLinecap="round" className="flex-shrink-0">
+          <circle cx="6" cy="6" r="4" />
+          <line x1="9.5" y1="9.5" x2="13" y2="13" />
+        </svg>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Escape') { setSearchQuery(''); (e.target as HTMLInputElement).blur() } }}
+          placeholder="Search"
+          className="flex-1 text-sm bg-transparent border-0 border-b border-gray-200 focus:border-gray-400 outline-none pb-0.5 placeholder-gray-300 text-gray-700 transition-colors"
+        />
+        {searchQuery && (
+          <button onClick={() => setSearchQuery('')} className="text-gray-300 hover:text-gray-500 text-base leading-none flex-shrink-0">×</button>
+        )}
+      </div>
+
       <div className="flex-1 overflow-y-auto">
-        {adding && (
+        {/* Search results */}
+        {query && (
+          <ul>
+            {searchResults.length === 0 ? (
+              <li className="px-5 py-4 text-sm text-gray-400">No guests match "{searchQuery}"</li>
+            ) : searchResults.map(guest => {
+              const info = assignments.get(guest.id)
+              const tableName = info?.tableId ? tableNameById.get(info.tableId) : null
+              const deps = dependents.get(guest.id) ?? []
+              return (
+                <li key={guest.id}>
+                  <div className="px-5 py-2.5 border-b border-gray-50 flex items-center gap-2 hover:bg-gray-50">
+                    <span className="text-sm text-gray-800 flex-1">{guest.name}</span>
+                    {tableName ? (
+                      <span className="text-[10px] bg-indigo-50 text-indigo-600 rounded px-1.5 py-0.5 font-medium whitespace-nowrap">{tableName}</span>
+                    ) : (
+                      <span className="text-[10px] bg-gray-100 text-gray-400 rounded px-1.5 py-0.5 font-medium">Unassigned</span>
+                    )}
+                  </div>
+                  {deps.map(dep => {
+                    const depInfo = assignments.get(dep.id)
+                    const depTable = depInfo?.tableId ? tableNameById.get(depInfo.tableId) : null
+                    return (
+                      <div key={dep.id} className="pl-8 pr-5 py-2 border-b border-gray-50 flex items-center gap-2 bg-gray-50">
+                        <span className="text-xs text-gray-400 mr-0.5">↳</span>
+                        <span className="text-sm text-gray-600 flex-1">{dep.name}</span>
+                        {depTable ? (
+                          <span className="text-[10px] bg-indigo-50 text-indigo-600 rounded px-1.5 py-0.5 font-medium whitespace-nowrap">{depTable}</span>
+                        ) : (
+                          <span className="text-[10px] bg-gray-100 text-gray-400 rounded px-1.5 py-0.5 font-medium">Unassigned</span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+
+        {adding && !query && (
           <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
             <div className="flex gap-1 mb-3 bg-gray-200 rounded-lg p-0.5">
               <button
@@ -317,12 +438,12 @@ export default function GuestList({ eventId, projectId, initialGuests, assignmen
         )}
 
         {importCount !== null && !importing && (
-          <div className="px-5 py-3 text-sm text-green-600 border-b border-gray-50">
-            ✓ Imported {importCount} guests
+          <div className={`px-5 py-3 text-sm border-b border-gray-50 ${importCount === 0 ? 'text-gray-400' : 'text-green-600'}`}>
+            {importCount === 0 ? 'Already imported — no new guests added.' : `✓ Imported ${importCount} guests`}
           </div>
         )}
 
-        {unassigned.length === 0 && !adding && !importing ? (
+        {!query && (unassigned.length === 0 && !adding && !importing ? (
           primaries.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 text-center px-6">
               <p className="text-sm text-gray-400">No guests yet</p>
@@ -340,10 +461,11 @@ export default function GuestList({ eventId, projectId, initialGuests, assignmen
                 key={host.id}
                 guest={host}
                 deps={dependents.get(host.id) ?? []}
+                isHighlighted={highlightedGuestIds.has(host.id)}
               />
             ))}
           </ul>
-        )}
+        ))}
       </div>
     </aside>
   )
