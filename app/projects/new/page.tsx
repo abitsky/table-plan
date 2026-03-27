@@ -14,7 +14,7 @@ interface TileProps {
   selected: boolean
   name: string
   loading: boolean
-  inputRef: React.RefObject<HTMLInputElement>
+  inputRef: React.RefObject<HTMLInputElement | null>
   onSelect: () => void
   onNameChange: (v: string) => void
   onEscape: () => void
