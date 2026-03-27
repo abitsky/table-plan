@@ -14,8 +14,8 @@ export default function ClearTestingButton() {
     setClearing(true)
 
     // Guests and projects are the two root tables — everything else cascades from them
-    const { error: gErr } = await supabase.from('guests').delete().gte('created_at', '1970-01-01')
-    const { error: pErr } = await supabase.from('projects').delete().gte('created_at', '1970-01-01')
+    const { error: gErr } = await supabase.from('guests').delete().not('id', 'is', null)
+    const { error: pErr } = await supabase.from('projects').delete().not('id', 'is', null)
 
     if (gErr || pErr) {
       window.alert(`Clear failed: ${(gErr || pErr)?.message}`)

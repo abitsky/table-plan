@@ -83,7 +83,7 @@ function DraggableSeat({
     <div
       ref={(node) => { setDropRef(node); setDragRef(node) }}
       {...(guest ? { ...listeners, ...attributes } : {})}
-      className={`w-8 h-8 ${isHead ? 'rounded-md' : 'rounded-full'} flex items-center justify-center text-[8px] leading-tight text-center overflow-hidden transition-all ${
+      className={`w-8 h-8 ${isHead ? 'rounded-md' : 'rounded-full'} flex items-center justify-center text-[10px] leading-tight text-center overflow-hidden transition-all ${
         isDragging
           ? 'opacity-30 border-2 border-dashed border-gray-300'
           : isOver
@@ -96,7 +96,7 @@ function DraggableSeat({
       }`}
       suppressHydrationWarning
     >
-      {guest && !isDragging ? guest.name.split(' ')[0].slice(0, 6) : ''}
+      {guest && !isDragging ? guest.name.split(' ')[0].slice(0, 7) : ''}
     </div>
   )
 }
@@ -424,7 +424,7 @@ function DroppableTableCard({
     table.shape === 'round'
       ? `${base} relative rounded-3xl w-48 min-h-[10rem] py-4 cursor-pointer`
       : table.shape === 'oval'
-      ? `${base} relative rounded-3xl w-60 min-h-[9rem] py-3 cursor-pointer`
+      ? `${base} relative rounded-[50%] w-64 min-h-[10rem] py-4 cursor-pointer`
       : `${base} relative rounded-xl w-60 min-h-[10rem] py-3 cursor-pointer`
 
   const assignedNames = seatGuests.filter(Boolean).map(g => shortName(g!.name))

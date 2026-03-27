@@ -94,14 +94,14 @@ export default function NewProject() {
         .insert({ project_id: project.id, name: name.trim(), event_type: 'wedding' })
         .select('id')
         .single()
-      if (event) router.push(`/events/${event.id}`)
+      if (event) { router.refresh(); router.push(`/events/${event.id}`) }
     } else {
       const { data } = await supabase
         .from('projects')
         .insert({ name: name.trim(), type: 'multi' })
         .select('id')
         .single()
-      if (data) router.push(`/projects/${data.id}`)
+      if (data) { router.refresh(); router.push(`/projects/${data.id}`) }
     }
   }
 

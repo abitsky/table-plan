@@ -3,6 +3,8 @@ import Link from 'next/link'
 import type { Project } from '@/lib/types'
 import ClearTestingButton from './ClearTestingButton'
 
+export const dynamic = 'force-dynamic'
+
 export default async function Dashboard() {
   const { data: projects } = await supabase
     .from('projects')
