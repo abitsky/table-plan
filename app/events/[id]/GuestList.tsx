@@ -30,6 +30,58 @@ function detectName(row: Record<string, string>): string {
 }
 
 
+function DraggableSearchRow({ guest, deps, tableName, assignments, tableNameById }: {
+  guest: Guest
+  deps: Guest[]
+  tableName: string | null | undefined
+  assignments: Map<string, SeatInfo>
+  tableNameById: Map<string, string>
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: guest.id })
+  return (
+    <li ref={setNodeRef} style={{ opacity: isDragging ? 0.3 : 1 }}>
+      <div
+        {...listeners}
+        {...attributes}
+        className="px-5 py-2.5 border-b border-gray-50 flex items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-gray-50"
+      >
+        <span className="text-sm text-gray-800 flex-1">{guest.name}</span>
+        {tableName ? (
+          <span className="text-[10px] bg-indigo-50 text-indigo-600 rounded px-1.5 py-0.5 font-medium whitespace-nowrap">{tableName}</span>
+        ) : (
+          <span className="text-[10px] bg-gray-100 text-gray-400 rounded px-1.5 py-0.5 font-medium">Unassigned</span>
+        )}
+      </div>
+      {deps.map(dep => {
+        const depInfo = assignments.get(dep.id)
+        const depTable = depInfo?.tableId ? tableNameById.get(depInfo.tableId) : null
+        return <DraggableSearchDep key={dep.id} dep={dep} tableName={depTable ?? null} />
+      })}
+    </li>
+  )
+}
+
+function DraggableSearchDep({ dep, tableName }: { dep: Guest; tableName: string | null }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: dep.id })
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{ opacity: isDragging ? 0.3 : 1 }}
+      className="pl-8 pr-5 py-2 border-b border-gray-50 flex items-center gap-2 bg-gray-50 cursor-grab active:cursor-grabbing"
+    >
+      <span className="text-xs text-gray-400 mr-0.5">↳</span>
+      <span className="text-sm text-gray-600 flex-1">{dep.name}</span>
+      {tableName ? (
+        <span className="text-[10px] bg-indigo-50 text-indigo-600 rounded px-1.5 py-0.5 font-medium whitespace-nowrap">{tableName}</span>
+      ) : (
+        <span className="text-[10px] bg-gray-100 text-gray-400 rounded px-1.5 py-0.5 font-medium">Unassigned</span>
+      )}
+    </div>
+  )
+}
+
 function DraggableDepRow({ dep }: { dep: Guest }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: dep.id })
   return (
@@ -397,31 +449,14 @@ export default function GuestList({ eventId, projectId, initialGuests, assignmen
               const tableName = info?.tableId ? tableNameById.get(info.tableId) : null
               const deps = dependents.get(guest.id) ?? []
               return (
-                <li key={guest.id}>
-                  <div className="px-5 py-2.5 border-b border-gray-50 flex items-center gap-2 hover:bg-gray-50">
-                    <span className="text-sm text-gray-800 flex-1">{guest.name}</span>
-                    {tableName ? (
-                      <span className="text-[10px] bg-indigo-50 text-indigo-600 rounded px-1.5 py-0.5 font-medium whitespace-nowrap">{tableName}</span>
-                    ) : (
-                      <span className="text-[10px] bg-gray-100 text-gray-400 rounded px-1.5 py-0.5 font-medium">Unassigned</span>
-                    )}
-                  </div>
-                  {deps.map(dep => {
-                    const depInfo = assignments.get(dep.id)
-                    const depTable = depInfo?.tableId ? tableNameById.get(depInfo.tableId) : null
-                    return (
-                      <div key={dep.id} className="pl-8 pr-5 py-2 border-b border-gray-50 flex items-center gap-2 bg-gray-50">
-                        <span className="text-xs text-gray-400 mr-0.5">↳</span>
-                        <span className="text-sm text-gray-600 flex-1">{dep.name}</span>
-                        {depTable ? (
-                          <span className="text-[10px] bg-indigo-50 text-indigo-600 rounded px-1.5 py-0.5 font-medium whitespace-nowrap">{depTable}</span>
-                        ) : (
-                          <span className="text-[10px] bg-gray-100 text-gray-400 rounded px-1.5 py-0.5 font-medium">Unassigned</span>
-                        )}
-                      </div>
-                    )
-                  })}
-                </li>
+                <DraggableSearchRow
+                  key={guest.id}
+                  guest={guest}
+                  deps={deps}
+                  tableName={tableName}
+                  assignments={assignments}
+                  tableNameById={tableNameById}
+                />
               )
             })}
           </ul>
