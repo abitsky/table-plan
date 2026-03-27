@@ -33,7 +33,15 @@ export default async function Dashboard() {
       <main className="mx-auto max-w-4xl px-8 py-16">
         {projects && projects.length > 0 ? (
           <div>
-            <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">Your plans</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Your plans</h2>
+              <Link
+                href="/projects/new"
+                className="bg-gray-900 text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                + New plan
+              </Link>
+            </div>
             <div className="space-y-2">
               {(projects as Project[]).map((project) => (
                 <div key={project.id} className="bg-white border border-gray-200 rounded-xl px-6 py-4 hover:border-gray-400 transition-colors flex items-center justify-between">
