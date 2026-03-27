@@ -24,7 +24,7 @@ export default function ClearTestingButton() {
     }
 
     setClearing(false)
-    router.push('/')
+    window.location.href = '/'
   }
 
   return (
