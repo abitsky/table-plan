@@ -24,6 +24,25 @@ export default async function EventWorkspace({
   const project = event.projects as { id: string; name: string }
   const guests = (eventGuests?.map((eg: { guests: unknown }) => eg.guests) ?? []) as Guest[]
 
+  // Fetch sibling events that have at least one guest (for PLA-41 copy feature)
+  const { data: siblingEventsRaw } = await supabase
+    .from('events')
+    .select('id, name')
+    .eq('project_id', event.project_id)
+    .neq('id', id)
+    .order('created_at')
+
+  const siblingsWithGuests = await Promise.all(
+    (siblingEventsRaw ?? []).map(async (e) => {
+      const { count } = await supabase
+        .from('event_guests')
+        .select('*', { count: 'exact', head: true })
+        .eq('event_id', e.id)
+      return (count ?? 0) > 0 ? e : null
+    })
+  )
+  const siblingEvents = siblingsWithGuests.filter(Boolean) as { id: string; name: string }[]
+
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       <header className="bg-white border-b border-gray-200 flex-shrink-0">
@@ -43,6 +62,7 @@ export default async function EventWorkspace({
           guests={guests}
           tables={(tables ?? []) as Table[]}
           initialAssignments={(seatAssignments ?? []) as SeatAssignment[]}
+          siblingEvents={siblingEvents}
         />
       </div>
     </div>

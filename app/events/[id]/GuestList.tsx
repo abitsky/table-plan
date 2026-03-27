@@ -16,6 +16,7 @@ interface Props {
   assignments: Map<string, SeatInfo>
   highlightedGuestIds: Set<string>
   tables: import('@/lib/types').Table[]
+  siblingEvents: { id: string; name: string }[]
 }
 
 function detectName(row: Record<string, string>): string {
@@ -75,7 +76,7 @@ function DraggableGuestRow({ guest, deps, isHighlighted }: { guest: Guest; deps:
   )
 }
 
-export default function GuestList({ eventId, projectId, initialGuests, assignments, highlightedGuestIds, tables }: Props) {
+export default function GuestList({ eventId, projectId, initialGuests, assignments, highlightedGuestIds, tables, siblingEvents }: Props) {
   const [adding, setAdding] = useState(false)
   const [addMode, setAddMode] = useState<'single' | 'couple'>('couple')
   const [newName, setNewName] = useState('')
@@ -84,7 +85,35 @@ export default function GuestList({ eventId, projectId, initialGuests, assignmen
   const [importing, setImporting] = useState(false)
   const [importCount, setImportCount] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [copying, setCopying] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleCopyFromEvent(sourceEventId: string) {
+    setCopying(true)
+    const { data: sourceLinks } = await supabase
+      .from('event_guests')
+      .select('guest_id')
+      .eq('event_id', sourceEventId)
+
+    if (!sourceLinks?.length) { setCopying(false); return }
+
+    const { data: currentLinks } = await supabase
+      .from('event_guests')
+      .select('guest_id')
+      .eq('event_id', eventId)
+
+    const alreadyHere = new Set((currentLinks ?? []).map(r => r.guest_id as string))
+    const toAdd = sourceLinks.map(r => r.guest_id as string).filter(id => !alreadyHere.has(id))
+
+    if (toAdd.length) {
+      await supabase.from('event_guests').insert(
+        toAdd.map(guestId => ({ event_id: eventId, guest_id: guestId }))
+      )
+    }
+
+    setCopying(false)
+    router.refresh()
+  }
   const router = useRouter()
 
   const tableNameById = new Map(tables.map(t => [t.id, t.name]))
@@ -190,45 +219,65 @@ export default function GuestList({ eventId, projectId, initialGuests, assignmen
           }
         }
 
-        // Fetch existing guests to avoid duplicates on re-import
-        const { data: existingGuests } = await supabase
+        // Fetch all guests in this project (name → id)
+        const { data: projectGuests } = await supabase
           .from('guests')
           .select('id, name')
           .eq('project_id', projectId)
 
-        const existingNameToId = new Map(
-          (existingGuests ?? []).map(g => [g.name.toLowerCase().trim(), g.id])
+        const projectNameToId = new Map(
+          (projectGuests ?? []).map(g => [g.name.toLowerCase().trim(), g.id])
         )
 
-        const toInsert = parsed.filter(g => !existingNameToId.has(g.name.toLowerCase().trim()))
+        // Fetch guests already linked to THIS event
+        const { data: currentEventLinks } = await supabase
+          .from('event_guests')
+          .select('guest_id')
+          .eq('event_id', eventId)
 
-        if (!toInsert.length) {
-          setImportCount(0)
-          setImporting(false)
-          router.refresh()
-          return
+        const alreadyInEvent = new Set((currentEventLinks ?? []).map(r => r.guest_id as string))
+
+        // Split parsed guests:
+        // - brand new (not in project at all) → insert into guests + event_guests
+        // - exists in project but not this event → just insert into event_guests
+        // - already in this event → skip
+        const toCreateNew: ParsedGuest[] = []
+        const toAddToEvent: string[] = []
+
+        for (const g of parsed) {
+          const existingId = projectNameToId.get(g.name.toLowerCase().trim())
+          if (existingId) {
+            if (!alreadyInEvent.has(existingId)) toAddToEvent.push(existingId)
+          } else {
+            toCreateNew.push(g)
+          }
         }
 
-        const { data: inserted } = await supabase
-          .from('guests')
-          .insert(toInsert.map(g => ({
-            project_id: projectId,
-            name: g.name,
-            relationship_type: g.relationship_type,
-          })))
-          .select('id, name')
+        // Insert brand-new guests into the guests table
+        let inserted: { id: string; name: string }[] = []
+        if (toCreateNew.length) {
+          const { data } = await supabase
+            .from('guests')
+            .insert(toCreateNew.map(g => ({
+              project_id: projectId,
+              name: g.name,
+              relationship_type: g.relationship_type,
+            })))
+            .select('id, name')
+          inserted = data ?? []
+        }
 
-        if (!inserted) { setImporting(false); return }
+        if (!inserted && !toAddToEvent.length) { setImporting(false); return }
 
-        // Include existing guests in the name map so host_id links work even
-        // when the primary already existed from a previous import
+        // Full name→id map for host_id linking
         const allNameToId = new Map([
-          ...existingNameToId,
+          ...projectNameToId,
           ...inserted.map(g => [g.name.toLowerCase().trim(), g.id] as [string, string]),
         ])
 
-        for (let i = 0; i < toInsert.length; i++) {
-          const g = toInsert[i]
+        // Set host_id on newly created dependents
+        for (let i = 0; i < toCreateNew.length; i++) {
+          const g = toCreateNew[i]
           if (!g.primaryName) continue
           const hostId = allNameToId.get(g.primaryName.toLowerCase().trim())
           const guestId = inserted[i]?.id
@@ -237,11 +286,17 @@ export default function GuestList({ eventId, projectId, initialGuests, assignmen
           }
         }
 
-        await supabase
-          .from('event_guests')
-          .insert(inserted.map(g => ({ event_id: eventId, guest_id: g.id })))
+        // Add event_guests rows for all guests being added to this event
+        const eventLinks = [
+          ...inserted.map(g => ({ event_id: eventId, guest_id: g.id })),
+          ...toAddToEvent.map(id => ({ event_id: eventId, guest_id: id })),
+        ]
 
-        setImportCount(inserted.length)
+        if (eventLinks.length) {
+          await supabase.from('event_guests').insert(eventLinks)
+        }
+
+        setImportCount(eventLinks.length)
         setImporting(false)
         router.refresh()
       },
@@ -439,15 +494,31 @@ export default function GuestList({ eventId, projectId, initialGuests, assignmen
 
         {importCount !== null && !importing && (
           <div className={`px-5 py-3 text-sm border-b border-gray-50 ${importCount === 0 ? 'text-gray-400' : 'text-green-600'}`}>
-            {importCount === 0 ? 'Already imported — no new guests added.' : `✓ Imported ${importCount} guests`}
+            {importCount === 0 ? 'All guests already in this event.' : `✓ Added ${importCount} guest${importCount === 1 ? '' : 's'} to this event`}
           </div>
         )}
 
         {!query && (unassigned.length === 0 && !adding && !importing ? (
           primaries.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 text-center px-6">
+            <div className="flex flex-col items-center justify-center text-center px-6 py-8">
               <p className="text-sm text-gray-400">No guests yet</p>
               <p className="text-xs text-gray-300 mt-1">Add guests manually or import a CSV</p>
+              {siblingEvents.length > 0 && (
+                <div className="mt-5 flex flex-col gap-2 w-full">
+                  <p className="text-xs text-gray-400 mb-1">Or copy a list from another event:</p>
+                  {copying ? (
+                    <p className="text-xs text-gray-400">Copying…</p>
+                  ) : siblingEvents.map(e => (
+                    <button
+                      key={e.id}
+                      onClick={() => handleCopyFromEvent(e.id)}
+                      className="text-xs text-gray-600 hover:text-gray-900 border border-gray-200 hover:border-gray-400 rounded-lg px-3 py-2 transition-colors text-left"
+                    >
+                      Use list from <span className="font-medium">{e.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-48 text-center px-6">

@@ -24,6 +24,7 @@ interface Props {
   guests: Guest[]
   tables: Table[]
   initialAssignments: SeatAssignment[]
+  siblingEvents: { id: string; name: string }[]
 }
 
 // Returns all seats adjacent to `a` on the given table layout
@@ -104,6 +105,7 @@ export default function SeatingWorkspace({
   guests,
   tables: initialTables,
   initialAssignments,
+  siblingEvents,
 }: Props) {
   // Lifted table state so handleDragEnd can access capacity/shape
   const [tables, setTables] = useState(initialTables)
@@ -655,6 +657,7 @@ export default function SeatingWorkspace({
         assignments={assignments}
         highlightedGuestIds={highlightedGuestIds}
         tables={tables}
+        siblingEvents={siblingEvents}
       />
       <DragOverlay dropAnimation={null}>
         {draggingPrimary ? (
